@@ -4,9 +4,9 @@ if(WIN32)
 else()
     set(USERHOME $ENV{HOME})
 endif()
-set(sdkVersion 2.1.0)
+set(sdkVersion 2.2.0)
 set(toolchainVersion 13_3_Rel1)
-set(picotoolVersion 2.1.0)
+set(picotoolVersion 2.2.0)
 set(picoVscode ${USERHOME}/.pico-sdk/cmake/pico-vscode.cmake)
 if (EXISTS ${picoVscode})
     include(${picoVscode})
@@ -57,9 +57,9 @@ if(WIN32)
 else()
     set(USERHOME $ENV{HOME})
 endif()
-set(sdkVersion 2.0.0)
-set(toolchainVersion 13_2_Rel1)
-set(picotoolVersion 2.0.0)
+set(sdkVersion 2.2.0)
+set(toolchainVersion 14_2_Rel1)
+set(picotoolVersion 2.2.0)
 set(picoVscode ${USERHOME}/.pico-sdk/cmake/pico-vscode.cmake)
 if (EXISTS ${picoVscode})
     include(${picoVscode})
@@ -81,7 +81,10 @@ add_subdirectory(manchester_codec)
 
 add_subdirectory(ethernet)
 
-add_executable(pico_prj pico_prj.cpp )
+add_subdirectory(ip)
+
+add_executable(pico_prj pico_prj.cpp
+        ip/ip.cpp)
 
 pico_set_program_name(pico_prj "pico_prj")
 pico_set_program_version(pico_prj "0.1")
@@ -99,7 +102,9 @@ target_link_libraries(pico_prj
 
 target_link_libraries(pico_prj
         ethernet)
-
+target_link_libraries(pico_prj
+        ip
+)
 # Add the standard include files to the build
 target_include_directories(pico_prj PRIVATE
   ${CMAKE_CURRENT_LIST_DIR}
