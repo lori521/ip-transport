@@ -21,6 +21,8 @@
 const uint8_t source_mac_address[] = {0xDE, 0xAD, 0xBE, 0xEF, 0xCA, 0xFE};
 const uint8_t destination_mac_address[] = {0xFE, 0xCA, 0xEF, 0xBE, 0xAD, 0xDE};
 const uint16_t ether_type = 0x0800;
+const char* source_ip_address = "192.168.100.2";
+const char* destination_ip_address = "192.168.100.3";
 
 // Data to send
 uint8_t sending_data[] = {'H', 'e', 'l', 'l', 'o', ' ', 'W', 'o', 'r', 'l', 'd', '!'};
