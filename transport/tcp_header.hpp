@@ -16,9 +16,11 @@ using namespace std;
 #define CHECKSUM_LENGTH 16
 #define URGENT_POINTER_LENGTH 16
 #define PAYLOAD_LENGTH 65535
-// #define OPTIONS_LENGTH -> size(Options) == (DOffset-5)*32
-// #define DATA_LENGTH -> variable
+#define CHECK_SUM_MASK 0xFFFF
+// OPTIONS_LENGTH -> size(Options) == (DOffset-5)*32
+// PAYLOAD_LENGTH -> variable
 
+// control_bits default values -> 0
 struct control_bits_t {
     uint8_t CWR : 1 = 0;
     uint8_t ECE : 1 = 0;
@@ -59,19 +61,15 @@ struct tcp_pseudoheader {
     tcp_pseudoheader();
 };
 
+// TCP Package -> IPv4 pseudo-header + TCP Header + payload
 struct tcp_package {
     tcp_pseudoheader speudo_hdr;
     tcp_header tcp_hdr;
     char* payload;
 
     tcp_package();
+    uint16_t checksum();
 };
-
-
-
-
-
-
 
 
 #endif // TCP_HPP
