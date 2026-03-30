@@ -1,5 +1,5 @@
 #include "header.hpp"
-#include "utils/utils.h"
+#include "utils/utils.hpp"
 #include <stdexcept>
 // IPv4 Options
 
@@ -69,6 +69,8 @@ ipv4_packet_header::ipv4_packet_header(std::vector<uint8_t> raw) {
   version = byte >> 4;
   header_length = byte & 0b1111;
 
+  printf("version = %hhu\n", version);
+
   // Copy service type
   service_type = raw[idx++];
 
@@ -85,7 +87,7 @@ ipv4_packet_header::ipv4_packet_header(std::vector<uint8_t> raw) {
   idx += 2;
 
   flags = flags_fragment_word >> 13;
-  fragment_offset = flags_fragment_word & 0b1111111111111111;
+  fragment_offset = flags_fragment_word & 0b1111111111111;
 
   // Copy ttl
   ttl = raw[idx++];
@@ -99,15 +101,16 @@ ipv4_packet_header::ipv4_packet_header(std::vector<uint8_t> raw) {
 
   // Copy adresses
   source_ip_address = read_uint32_n(raw, idx);
-  idx += 2;
+  idx += 4;
 
   destination_ip_address = read_uint32_n(raw, idx);
-  idx += 2;
+  idx += 4;
 
   // Copy options
   size_t options_len = this->header_length - FIXED_PART_HEADER_SIZE;
   if (options_len > 40) {
-    throw std::invalid_argument("Options cannot have length > 40");
+    std::printf("Options cannot have length > 40\n");
+    return;
   }
 
   this->options = ipv4_options_t(std::vector<uint8_t>(
@@ -140,4 +143,15 @@ ipv4_packet_header::ipv4_packet_header(uint16_t payload_size,
   this->destination_ip_address = destination;
   // Checksum is calculated at the end
   this->header_check_sum = 0;
+}
+
+void ipv4_packet_header::debug() {
+  printf("Header: \n");
+  printf("-version = %u\n", this->version);
+  printf("-header_len = %u\n", this->header_length);
+  printf("-service type = %u\n", this->service_type);
+  printf("-total length = %u\n", this->total_length);
+  printf("-packet id = %u\n", this->packet_id);
+  printf("-source_addr = %u\n", this->source_ip_address);
+  printf("-destination_addr = %u\n", this->destination_ip_address);
 }

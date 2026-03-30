@@ -1,4 +1,4 @@
-#include "utils.h"
+#include "utils/utils.hpp"
 #include <cstdint>
 #include <cstring>
 #include <stdexcept>
@@ -28,14 +28,14 @@ uint32_t read_uint32_n(std::vector<uint8_t> &data, int idx) {
   return d_word;
 }
 
-// This can throw invalid_argument if addr is formatted wrong
-uint32_t decode_ip_address(char addr[15]) {
-  char *part = strtok(addr, ".");
-  for (int i = 0; i < 4; i++) {
-    uint8_t parsed_byte = std::stoi(part);
-    part = strtok(NULL, ".");
-    if (part == NULL) {
-      throw std::invalid_argument("Address has invalid format");
-    }
+bool decode_ip_address(const char* addr, uint32_t& ip_encoded) {
+  ip_encoded = 0;
+
+  int read = sscanf(addr, "%hhu.%hhu.%hhu.%hhu", ((uint8_t*)&ip_encoded) + 3, ((uint8_t*)&ip_encoded) + 2, ((uint8_t*)&ip_encoded) + 1, ((uint8_t*)&ip_encoded));
+  if (read != 4) {
+    printf("Could not read address\n");
+    return false;
   }
+
+  return true;
 }
