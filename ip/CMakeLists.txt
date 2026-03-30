@@ -6,6 +6,8 @@ include($ENV{PICO_SDK_PATH}/external/pico_sdk_import.cmake)
 # Create the library
 add_library(ip
         ip.cpp
+        utils/network_helpers.cpp
+        header/header.cpp
 )
 
 # Add include directories
