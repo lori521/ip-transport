@@ -60,7 +60,6 @@ std::vector<uint8_t> ipv4_packet_header::dump_network_header() {
   while (network_payload.size() < (this->header_length << 2)) {
     network_payload.push_back(0);
   }
-
   return network_payload;
 }
 
@@ -73,9 +72,8 @@ bool ipv4_packet_header::read_raw(std::vector<uint8_t> raw) {
   uint8_t byte = raw[idx++];
   version = byte >> 4;
 
-  printf("version = %hhu\n", version);
-
   header_length = byte & 0b1111;
+
   if (raw.size() < (header_length << 2)) {
     printf("Raw data is too small\n");
     return false;
@@ -136,20 +134,21 @@ ipv4_packet_header::ipv4_packet_header(uint16_t payload_size,
                                        uint32_t destination,
                                        ipv4_settings_t &settings) {
 
+  this->options = settings.options;
+
   this->version = 4;
 
-  size_t aligned_options_size = ((((this->options.size() - 1) >> 2) + 1) << 2);
+  size_t aligned_options_size = (((this->options.size() + 3) >> 2) << 2);
   this->header_length = (FIXED_PART_HEADER_SIZE + aligned_options_size) >> 2;
 
   this->service_type = settings.service_type;
   this->total_length = payload_size + (this->header_length << 2);
 
-  if (settings.allow_fragmentation && fragment_info.is_fragmented) {
-    this->packet_id = fragment_info.fragment_id;
-    this->fragment_offset = fragment_info.fragment_offset;
-    if (!fragment_info.is_last) {
-      this->flags = MORE_FRAGMENTS;
-    }
+  this->packet_id = fragment_info.fragment_id;
+  this->fragment_offset = fragment_info.fragment_offset;
+  if (settings.allow_fragmentation && fragment_info.is_fragmented &&
+      !fragment_info.is_last) {
+    this->flags = MORE_FRAGMENTS;
   } else {
     this->flags = settings.allow_fragmentation ? 0 : DO_NOT_FRAGMENT;
   }
@@ -160,10 +159,6 @@ ipv4_packet_header::ipv4_packet_header(uint16_t payload_size,
   this->destination_ip_address = destination;
   // Checksum is calculated at the end
   this->header_check_sum = 0;
-
-  this->options = settings.options;
-
-  this->debug();
 }
 
 void ipv4_packet_header::debug() {
@@ -173,6 +168,9 @@ void ipv4_packet_header::debug() {
   printf("-service type = %u\n", this->service_type);
   printf("-total length = %u\n", this->total_length);
   printf("-packet id = %u\n", this->packet_id);
+  printf("-fragment_offset = %u\n", this->fragment_offset);
+  printf("-do_not_fragment = %b\n", (this->flags & DO_NOT_FRAGMENT) != 0);
+  printf("-more_fragments = %b\n", (this->flags & MORE_FRAGMENTS) != 0);
   printf("-source_addr = %u\n", this->source_ip_address);
   printf("-destination_addr = %u\n", this->destination_ip_address);
 }

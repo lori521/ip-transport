@@ -36,7 +36,7 @@ public:
     void send_manchester(uint8_t *data, uint32_t length);
 
     // Receive functions
-    void recv_manchester(uint8_t *data, uint32_t length);
+    uint32_t recv_manchester(uint8_t *data, uint32_t max_length);
     void recv_debug_print(uint8_t *data, uint32_t length);
 };
 

@@ -54,14 +54,14 @@ vector<uint8_t> Ethernet::eth_encap(uint8_t *payload, uint32_t payload_len)
     return vector<uint8_t>(frame, frame + sizeof(frame));
 }
 
-vector<uint8_t> Ethernet::eth_decap(uint8_t *frame, uint32_t frame_data_length, uint32_t exp_len)
+vector<uint8_t> Ethernet::eth_decap(uint8_t *frame, uint32_t frame_data_length)
 {
     // Extract the received FCS
     uint32_t received_fcs;
-    memcpy(&received_fcs, frame + MAC_HEADER_LEN + exp_len, sizeof(received_fcs));
+    memcpy(&received_fcs, frame + frame_data_length - 4, sizeof(received_fcs));
 
     // Calculate the FCS
-    uint32_t calculated_fcs = calculate_fcs(frame, MAC_HEADER_LEN + exp_len);
+    uint32_t calculated_fcs = calculate_fcs(frame, frame_data_length - 4);
 
     // Compare FCS
     if (received_fcs != calculated_fcs) {
@@ -83,5 +83,5 @@ vector<uint8_t> Ethernet::eth_decap(uint8_t *frame, uint32_t frame_data_length, 
         return vector<uint8_t>();
     }    
 
-    return vector<uint8_t>(frame + MAC_HEADER_LEN, frame + MAC_HEADER_LEN + exp_len);
+    return vector<uint8_t>(frame + MAC_HEADER_LEN, frame + frame_data_length - 4);
 }

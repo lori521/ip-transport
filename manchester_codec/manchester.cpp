@@ -107,17 +107,19 @@ void Manchester::wait_for_preamble()
     }
 }
 
-void Manchester::recv_manchester(uint8_t *data, uint32_t length)
+uint32_t Manchester::recv_manchester(uint8_t *data, uint32_t max_length)
 {
     wait_for_preamble();
 
-    for (size_t i = 0; i < length; i++) {
+    for (size_t i = 0; i < max_length; i++) {
         int byte = receive_manchester_byte();
         if (byte == -1) {
-            return;
+            return i - 1;
         }
         data[i] = byte;
     }
+    
+    return max_length;
 }
 
 void Manchester::recv_debug_print(uint8_t *data, uint32_t length)

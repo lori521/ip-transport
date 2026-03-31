@@ -95,7 +95,8 @@ bool IPv4Sender::GeneratePackets(std::vector<uint8_t> &payload,
       return false;
     }
 
-    size_t number_packets = ((payload.size() - 1) / packet_payload_size + 1);
+    size_t number_packets =
+        ((payload.size() + (packet_payload_size - 1)) / packet_payload_size);
     for (int i = 0; i < number_packets; i++) {
       ipv4_fragment_info_t fragment_info = ipv4_fragment_info_t{
           .is_fragmented = true,
@@ -132,10 +133,18 @@ bool IPv4Sender::GeneratePackets(std::vector<uint8_t> &payload,
 bool ipv4_packet_batch_t::add_packet(ipv4_packet_t packet) {
   if (ipv4_packets.size() == 0) {
     // No checks just add
+    this->packet_id = packet.header.packet_id;
     ipv4_packets.insert(packet);
+
+    // Check if it's a lonely packet
+    if ((packet.header.flags & MORE_FRAGMENTS) == 0 &&
+        packet.header.fragment_offset == 0) {
+      this->done = true;
+    }
+
   } else {
-    // Make some sanity checks, trust first packet
-    if (ipv4_packets.begin()->header.packet_id != packet.header.packet_id) {
+    // Make some sanity checks
+    if (this->packet_id != packet.header.packet_id) {
       std::printf("Cannot add to batch packet with different id");
       return false;
     }
@@ -153,7 +162,7 @@ bool ipv4_packet_batch_t::add_packet(ipv4_packet_t packet) {
     }
 
     // Make final check that last packet has MF = 0
-    if (ipv4_packets.rbegin()->header.flags & MORE_FRAGMENTS == 1) {
+    if ((ipv4_packets.rbegin()->header.flags & MORE_FRAGMENTS) != 0) {
       this->done = false;
     }
   }
