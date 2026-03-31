@@ -1,5 +1,5 @@
 #include "manchester.hpp"
-
+#include <time.h>
 void Manchester::init(uint8_t tx_pin, uint8_t rx_pin, uint32_t baud_rate, uint32_t clock_period_us)
 {
     this->tx_pin = tx_pin;
@@ -29,11 +29,13 @@ int Manchester::receive_manchester_byte()
 {
     int byte = 0;
     for (int i = 7; i >= 0; i--) {
+        busy_wait_us(this->clock_period_us / 4);
         int first_half = gpio_get(this->rx_pin);
+        
         busy_wait_us(this->clock_period_us / 2);
-
         int second_half = gpio_get(this->rx_pin);
-        busy_wait_us(this->clock_period_us / 2);
+        
+        busy_wait_us(this->clock_period_us / 4); 
 
         int bit = Manchester::receive_manchester_bit(first_half, second_half);
         if (bit == -1) {
@@ -114,7 +116,7 @@ uint32_t Manchester::recv_manchester(uint8_t *data, uint32_t max_length)
     for (size_t i = 0; i < max_length; i++) {
         int byte = receive_manchester_byte();
         if (byte == -1) {
-            return i - 1;
+            return i;
         }
         data[i] = byte;
     }

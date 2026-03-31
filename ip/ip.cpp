@@ -185,18 +185,29 @@ bool ipv4_packet_batch_t::get_payload(std::vector<uint8_t> &merged_payload) {
   return true;
 }
 
-void IPv4Receiver::ReadPackets(std::vector<uint8_t> &data) {
+bool IPv4Receiver::ReadPackets(std::vector<uint8_t> &data) {
   ipv4_packet_t packet;
-  packet.read_raw(data);
+
+  if (!packet.read_raw(data)) {
+    printf("Could not parse data in payload");
+    return false;
+  }
 
   if (this->packets.find(packet.header.packet_id) == this->packets.end()) {
     // Add new batch
     ipv4_packet_batch_t new_batch;
-    new_batch.add_packet(packet);
+    if (!new_batch.add_packet(packet)) {
+      printf("Could not add packet to batch\n");
+      return false;
+    }
     this->packets[packet.header.packet_id] = new_batch;
   } else {
-    this->packets[packet.header.packet_id].add_packet(packet);
+    if (!this->packets[packet.header.packet_id].add_packet(packet)) {
+      printf("Could not add packet to batch\n");
+      return false;
+    }
   }
+  return true;
 }
 
 std::vector<ipv4_packet_batch_t> IPv4Receiver::PopFinishedBatch() {

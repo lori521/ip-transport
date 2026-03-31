@@ -55,7 +55,7 @@ private:
 
 public:
   IPv4Receiver(ipv4_settings_t &settings) : settings(settings) {}
-  void ReadPackets(std::vector<uint8_t> &data);
+  bool ReadPackets(std::vector<uint8_t> &data);
 
   std::vector<ipv4_packet_batch_t> PopFinishedBatch();
   void RemoveTimedOutBatches();

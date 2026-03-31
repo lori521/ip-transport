@@ -65,6 +65,12 @@ std::vector<uint8_t> ipv4_packet_header::dump_network_header() {
 
 // Read header from raw data
 bool ipv4_packet_header::read_raw(std::vector<uint8_t> raw) {
+  if (raw.size() == 0) {
+    // I need one byte
+    printf("Empty payload in header parsing\n");
+    return false;
+  }
+
   // Copy fixed part
   size_t idx = 0;
 
