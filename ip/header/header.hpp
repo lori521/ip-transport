@@ -4,7 +4,6 @@
 #include <cstdint>
 #include <vector>
 
-
 struct ipv4_fragment_info_t {
   bool is_fragmented;
   uint16_t fragment_id;
@@ -35,8 +34,8 @@ struct ipv4_packet_header {
   std::vector<uint8_t> dump_network_header();
 
   ipv4_packet_header() = default;
-  ipv4_packet_header(std::vector<uint8_t> raw);
+  bool read_raw(std::vector<uint8_t> raw);
   ipv4_packet_header(uint16_t payload_size, ipv4_fragment_info_t fragment_info,
                      uint32_t destination, ipv4_settings_t &settings);
-    void debug();
+  void debug();
 };

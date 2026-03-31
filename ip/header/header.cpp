@@ -56,20 +56,30 @@ std::vector<uint8_t> ipv4_packet_header::dump_network_header() {
   network_payload.insert(network_payload.end(), options_payload.begin(),
                          options_payload.end());
 
+  // Add padding to 4 byte allignment
+  while (network_payload.size() < (this->header_length << 2)) {
+    network_payload.push_back(0);
+  }
+
   return network_payload;
 }
 
 // Read header from raw data
-ipv4_packet_header::ipv4_packet_header(std::vector<uint8_t> raw) {
+bool ipv4_packet_header::read_raw(std::vector<uint8_t> raw) {
   // Copy fixed part
   size_t idx = 0;
 
   // Copy version and header_length
   uint8_t byte = raw[idx++];
   version = byte >> 4;
-  header_length = byte & 0b1111;
 
   printf("version = %hhu\n", version);
+
+  header_length = byte & 0b1111;
+  if (raw.size() < (header_length << 2)) {
+    printf("Raw data is too small\n");
+    return false;
+  }
 
   // Copy service type
   service_type = raw[idx++];
@@ -107,14 +117,17 @@ ipv4_packet_header::ipv4_packet_header(std::vector<uint8_t> raw) {
   idx += 4;
 
   // Copy options
-  size_t options_len = this->header_length - FIXED_PART_HEADER_SIZE;
+  size_t header_length_bytes = this->header_length << 2;
+  size_t options_len = header_length_bytes - FIXED_PART_HEADER_SIZE;
   if (options_len > 40) {
     std::printf("Options cannot have length > 40\n");
-    return;
+    return false;
   }
 
   this->options = ipv4_options_t(std::vector<uint8_t>(
-      raw.begin() + FIXED_PART_HEADER_SIZE, raw.begin() + this->header_length));
+      raw.begin() + FIXED_PART_HEADER_SIZE, raw.begin() + header_length_bytes));
+
+  return true;
 }
 
 // Create new IPv4 packet header
@@ -122,10 +135,14 @@ ipv4_packet_header::ipv4_packet_header(uint16_t payload_size,
                                        ipv4_fragment_info_t fragment_info,
                                        uint32_t destination,
                                        ipv4_settings_t &settings) {
+
   this->version = 4;
-  this->header_length = FIXED_PART_HEADER_SIZE + settings.options.size();
+
+  size_t aligned_options_size = ((((this->options.size() - 1) >> 2) + 1) << 2);
+  this->header_length = (FIXED_PART_HEADER_SIZE + aligned_options_size) >> 2;
+
   this->service_type = settings.service_type;
-  this->total_length = payload_size + this->header_length;
+  this->total_length = payload_size + (this->header_length << 2);
 
   if (settings.allow_fragmentation && fragment_info.is_fragmented) {
     this->packet_id = fragment_info.fragment_id;
@@ -143,6 +160,10 @@ ipv4_packet_header::ipv4_packet_header(uint16_t payload_size,
   this->destination_ip_address = destination;
   // Checksum is calculated at the end
   this->header_check_sum = 0;
+
+  this->options = settings.options;
+
+  this->debug();
 }
 
 void ipv4_packet_header::debug() {

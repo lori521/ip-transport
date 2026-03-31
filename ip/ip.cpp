@@ -22,10 +22,15 @@ std::vector<uint8_t> ipv4_packet_t::dump_network_packet() {
   return network_payload;
 }
 
-ipv4_packet_t::ipv4_packet_t(std::vector<uint8_t> raw) {
-  this->header = ipv4_packet_header(raw);
-  this->data =
-      std::vector<uint8_t>(raw.begin() + header.header_length, raw.end());
+bool ipv4_packet_t::read_raw(std::vector<uint8_t> raw) {
+  if (this->header.read_raw(raw) == false) {
+    printf("Could not read header from raw data\n");
+    return false;
+  }
+
+  this->data = std::vector<uint8_t>(raw.begin() + (header.header_length << 2),
+                                    raw.end());
+  return true;
 }
 
 ipv4_packet_t::ipv4_packet_t(std::vector<uint8_t> payload,
@@ -37,7 +42,7 @@ ipv4_packet_t::ipv4_packet_t(std::vector<uint8_t> payload,
 
   // Calculate checksum
   std::vector<uint8_t> bytes = this->dump_network_packet();
-  if (bytes.size() & 1 == 0) {
+  if ((bytes.size() & 1) == 0) {
     bytes.push_back(0);
   }
 
@@ -56,9 +61,13 @@ ipv4_packet_t::ipv4_packet_t(std::vector<uint8_t> payload,
 // - allow_fragmentation is true, but network max_len is smaller than a minimum
 // size
 bool IPv4Sender::GeneratePackets(std::vector<uint8_t> &payload,
-                                          char destination[15], ipv4_packet_batch_t& batch) {
-  // Parse char* to uin32_t
+                                 char *destination,
+                                 ipv4_packet_batch_t &batch) {
   uint32_t destination_addr;
+  if (decode_ip_address(destination, destination_addr) == false) {
+    printf("Could not parse destination addr\n");
+    return false;
+  }
 
   batch.packet_id = random();
 
@@ -73,11 +82,13 @@ bool IPv4Sender::GeneratePackets(std::vector<uint8_t> &payload,
   } else if (payload.size() + settings.options.size() +
                  ipv4_packet_header::FIXED_PART_HEADER_SIZE >
              settings.max_fragment_len) {
+
     // Send multiple packets with size aligned to 8 bytes
-    size_t packet_payload_size = (settings.max_fragment_len -
-                                  ipv4_packet_header::FIXED_PART_HEADER_SIZE -
-                                  settings.options.size()) >>
-                                 8 << 8;
+    size_t packet_payload_size = (((settings.max_fragment_len -
+                                    ipv4_packet_header::FIXED_PART_HEADER_SIZE -
+                                    settings.options.size()) >>
+                                   3)
+                                  << 3);
     if (packet_payload_size == 0) {
       std::printf(
           "Cannot fragment this package max_fragment_len is too small\n");
@@ -89,11 +100,15 @@ bool IPv4Sender::GeneratePackets(std::vector<uint8_t> &payload,
       ipv4_fragment_info_t fragment_info = ipv4_fragment_info_t{
           .is_fragmented = true,
           .fragment_id = batch.packet_id,
-          .fragment_offset = (uint16_t)((i * packet_payload_size) >> 8),
+          .fragment_offset = (uint16_t)((i * packet_payload_size) >> 3),
           .is_last = (i + 1 == number_packets)};
 
-      ipv4_packet_t packet =
-          ipv4_packet_t(payload, fragment_info, destination_addr, settings);
+      std::vector<uint8_t> fragment_payload(
+          payload.begin() + (i * packet_payload_size),
+          payload.begin() + ((i + 1) * packet_payload_size));
+
+      ipv4_packet_t packet = ipv4_packet_t(fragment_payload, fragment_info,
+                                           destination_addr, settings);
       batch.add_packet(packet);
     }
 
@@ -114,71 +129,75 @@ bool IPv4Sender::GeneratePackets(std::vector<uint8_t> &payload,
   return true;
 }
 
-
-
 bool ipv4_packet_batch_t::add_packet(ipv4_packet_t packet) {
   if (ipv4_packets.size() == 0) {
     // No checks just add
-    ipv4_packets.push_back(packet);
+    ipv4_packets.insert(packet);
   } else {
     // Make some sanity checks, trust first packet
-    if (ipv4_packets[0].header.packet_id != packet.header.packet_id) {
-      std::printf(
-          "Cannot add to batch packet with different id");
+    if (ipv4_packets.begin()->header.packet_id != packet.header.packet_id) {
+      std::printf("Cannot add to batch packet with different id");
       return false;
     }
-    ipv4_packets.push_back(packet);
+    ipv4_packets.insert(packet);
+
+    this->done = true;
+    size_t expected_packet_offset = 0;
+    for (auto pkt : ipv4_packets) {
+      if (expected_packet_offset != pkt.header.fragment_offset) {
+        this->done = false;
+        break;
+      }
+
+      expected_packet_offset = expected_packet_offset + (pkt.data.size() >> 3);
+    }
+
+    // Make final check that last packet has MF = 0
+    if (ipv4_packets.rbegin()->header.flags & MORE_FRAGMENTS == 1) {
+      this->done = false;
+    }
   }
   return true;
 }
 
-bool compare_by_fragment_offset(const ipv4_packet_t &A,
-                                const ipv4_packet_t &B) {
-  return A.header.fragment_offset < B.header.fragment_offset;
-}
-
 bool ipv4_packet_batch_t::get_payload(std::vector<uint8_t> &merged_payload) {
-  // sort by fragment offset to make sure I have the entire payload
-  std::sort(this->ipv4_packets.begin(), this->ipv4_packets.end(),
-            compare_by_fragment_offset);
-
   size_t expected_packet_offset = 0;
-  for (int i = 0; i < ipv4_packets.size(); i++) {
-    ipv4_packet_t pkt = ipv4_packets[i];
+  for (auto pkt : ipv4_packets) {
     if (expected_packet_offset != pkt.header.fragment_offset) {
-      std::printf(
-          "Payload was not received entirely in fragmentation");
+      std::printf("Payload was not received entirely in fragmentation");
       return false;
     }
 
     merged_payload.insert(merged_payload.end(), pkt.data.begin(),
                           pkt.data.end());
 
-    expected_packet_offset = expected_packet_offset + (pkt.data.size() >> 8);
+    expected_packet_offset = expected_packet_offset + (pkt.data.size() >> 3);
   }
   return true;
 }
 
 void IPv4Receiver::ReadPackets(std::vector<uint8_t> &data) {
-  ipv4_packet_t packet = ipv4_packet_t(data);
-  if (this->packets.find(packet.header.packet_id) != this->packets.end()) {
+  ipv4_packet_t packet;
+  packet.read_raw(data);
+
+  if (this->packets.find(packet.header.packet_id) == this->packets.end()) {
     // Add new batch
     ipv4_packet_batch_t new_batch;
     new_batch.add_packet(packet);
     this->packets[packet.header.packet_id] = new_batch;
-  }else {
+  } else {
     this->packets[packet.header.packet_id].add_packet(packet);
   }
 }
 
 std::vector<ipv4_packet_batch_t> IPv4Receiver::PopFinishedBatch() {
   std::vector<ipv4_packet_batch_t> finished;
-  for (const auto& entries : this->packets) {
+  for (const auto &entries : this->packets) {
     if (entries.second.done == true) {
       finished.push_back(entries.second);
     }
   }
-  for (const auto& f: finished) {
+  for (const auto &f : finished) {
     this->packets.erase(f.packet_id);
   }
   return finished;
