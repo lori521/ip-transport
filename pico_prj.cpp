@@ -95,7 +95,10 @@ void receiver(Manchester &manchester) {
       vector<uint8_t> message;
       batch.get_payload(message);
 
-      printf("Received message: ");
+      char src_addr[16];
+      encode_ip_address(batch.ipv4_packets.begin()->header.source_ip_address,
+                        src_addr);
+      printf("Received message from ip address %s: ", src_addr);
       for (size_t i = 0; i < message.size(); i++) {
         printf("%c", message[i]);
       }

@@ -41,3 +41,8 @@ bool decode_ip_address(const char *addr, uint32_t &ip_encoded) {
 
   return true;
 }
+
+void encode_ip_address(uint32_t ip, char *buff) {
+  sprintf(buff, "%hhu.%hhu.%hhu.%hhu", ip >> 24, (ip >> 16) & 0b11111111,
+          (ip >> 8) & 0b11111111, ip & 0b11111111);
+}
