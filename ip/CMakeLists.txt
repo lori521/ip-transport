@@ -18,6 +18,8 @@ target_include_directories(ip PUBLIC
 # Link against pico standard library
 target_link_libraries(ip
         pico_stdlib
+        ethernet
+        manchester_codec
 )
 
 # Enable USB output, disable UART output

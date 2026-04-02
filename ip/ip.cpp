@@ -60,9 +60,8 @@ ipv4_packet_t::ipv4_packet_t(std::vector<uint8_t> payload,
 // - allow_fragmentation is set to false, and network requires fragmentation
 // - allow_fragmentation is true, but network max_len is smaller than a minimum
 // size
-bool IPv4Sender::GeneratePackets(std::vector<uint8_t> &payload,
-                                 char *destination,
-                                 ipv4_packet_batch_t &batch) {
+bool IPv4::GeneratePackets(std::vector<uint8_t> &payload, char *destination,
+                           ipv4_packet_batch_t &batch) {
   uint32_t destination_addr;
   if (decode_ip_address(destination, destination_addr) == false) {
     printf("Could not parse destination addr\n");
@@ -185,7 +184,7 @@ bool ipv4_packet_batch_t::get_payload(std::vector<uint8_t> &merged_payload) {
   return true;
 }
 
-bool IPv4Receiver::ReadPackets(std::vector<uint8_t> &data) {
+bool IPv4::ReadPackets(std::vector<uint8_t> &data) {
   ipv4_packet_t packet;
 
   if (!packet.read_raw(data)) {
@@ -210,15 +209,87 @@ bool IPv4Receiver::ReadPackets(std::vector<uint8_t> &data) {
   return true;
 }
 
-std::vector<ipv4_packet_batch_t> IPv4Receiver::PopFinishedBatch() {
-  std::vector<ipv4_packet_batch_t> finished;
+bool IPv4::PopFinishedBatch(ipv4_packet_batch_t &finished) {
   for (const auto &entries : this->packets) {
     if (entries.second.done == true) {
-      finished.push_back(entries.second);
+      finished = entries.second;
+      this->packets.erase(finished.packet_id);
+      return true;
     }
   }
-  for (const auto &f : finished) {
-    this->packets.erase(f.packet_id);
+  return false;
+}
+
+bool IPv4::SendIPPacket(vector<uint8_t> &payload, char *destination) {
+  ipv4_packet_batch_t batch;
+  if (this->GeneratePackets(payload, destination, batch) == false) {
+    printf("Could not generate IP packets\n");
+    return false;
   }
-  return finished;
+
+  for (ipv4_packet_t pkt : batch.ipv4_packets) {
+    vector<uint8_t> ip_payload = pkt.dump_network_packet();
+
+    vector<uint8_t> eth_payload =
+        ethernet.eth_encap(ip_payload.data(), ip_payload.size());
+
+    if (eth_payload.size() == 0) {
+      printf("Could not encode ethernet payload\n");
+      return false;
+    }
+
+    manchester.send_manchester(eth_payload.data(), eth_payload.size());
+    manchester.send_debug_print(eth_payload.data(), eth_payload.size());
+  }
+  return true;
+}
+
+// Reads first whole IP packet
+bool IPv4::ReadIPPacket(vector<uint8_t> &payload, ipv4_packet_header &header) {
+  ipv4_packet_batch_t batch;
+  while (!this->PopFinishedBatch(batch)) {
+    std::vector<uint8_t> manchester_payload(
+        1024); // TODO: Replace this with something not hardcoded
+    uint32_t size = manchester.recv_manchester(manchester_payload.data(),
+                                               manchester_payload.size());
+    manchester_payload.resize(size);
+    manchester.recv_debug_print(manchester_payload.data(),
+                                manchester_payload.size());
+
+    std::vector<uint8_t> eth_payload = ethernet.eth_decap(
+        manchester_payload.data(), manchester_payload.size());
+
+    if (eth_payload.size() == 0) {
+      printf("Could not read eth packet\n");
+      continue;
+    }
+
+    if (this->ReadPackets(eth_payload) == false) {
+      printf("Could not read ip packet\n");
+      continue;
+    }
+
+    // TODO Optional: cleanup map from ip batches that where never completed
+  }
+
+  payload.clear();
+  batch.get_payload(payload);
+  header = batch.ipv4_packets.begin()->header;
+  return true;
+}
+
+bool IPv4::ReadIPPacket(vector<uint8_t> &payload, char *source) {
+  ipv4_packet_header header;
+  if (!this->ReadIPPacket(payload, header)) {
+    return false;
+  }
+
+  encode_ip_address(header.source_ip_address, source);
+  return true;
+}
+
+uint32_t IPv4::GetSourceAddress() { return this->settings.device_ip_address; }
+
+void IPv4::GetSourceAddress(char *src_addr) {
+  return encode_ip_address(GetSourceAddress(), src_addr);
 }

@@ -1,12 +1,13 @@
 #pragma once
 
+#include "ethernet.hpp"
+#include "manchester.hpp"
 #include <cstdint>
 #include <header/header.hpp>
 #include <set>
 #include <settings/settings.hpp>
 #include <unordered_map>
 #include <vector>
-
 struct ipv4_packet_t {
   ipv4_packet_header header;
   std::vector<uint8_t> data;
@@ -37,28 +38,34 @@ struct ipv4_packet_batch_t {
   bool add_packet(ipv4_packet_t packet);
 };
 
-class IPv4Sender {
+class IPv4 {
 private:
-  ipv4_settings_t settings;
-
-public:
-  IPv4Sender(ipv4_settings_t &settings) : settings(settings) {}
-
-  bool GeneratePackets(std::vector<uint8_t> &payload, char destination[],
-                       ipv4_packet_batch_t &batch);
-};
-
-class IPv4Receiver {
-private:
+  Manchester &manchester;
+  Ethernet &ethernet;
   ipv4_settings_t settings;
   std::unordered_map<uint16_t, ipv4_packet_batch_t> packets;
 
-public:
-  IPv4Receiver(ipv4_settings_t &settings) : settings(settings) {}
   bool ReadPackets(std::vector<uint8_t> &data);
 
-  std::vector<ipv4_packet_batch_t> PopFinishedBatch();
+  bool PopFinishedBatch(ipv4_packet_batch_t &finished);
   void RemoveTimedOutBatches();
 
   ipv4_packet_batch_t RoutePacket(ipv4_packet_t packet, char *destination);
+
+  bool GeneratePackets(std::vector<uint8_t> &payload, char destination[],
+                       ipv4_packet_batch_t &batch);
+
+public:
+  IPv4(Manchester &manchester, Ethernet &ethernet, ipv4_settings_t &settings)
+      : manchester(manchester), ethernet(ethernet), settings(settings) {}
+
+  bool SendIPPacket(vector<uint8_t> &payload, char *destination);
+  bool ReadIPPacket(vector<uint8_t> &received_payload, char *source);
+
+  // Support this for future use
+  bool ReadIPPacket(vector<uint8_t> &received_payload,
+                    ipv4_packet_header &header);
+
+  uint32_t GetSourceAddress();
+  void GetSourceAddress(char *address);
 };

@@ -56,6 +56,11 @@ vector<uint8_t> Ethernet::eth_encap(uint8_t *payload, uint32_t payload_len)
 
 vector<uint8_t> Ethernet::eth_decap(uint8_t *frame, uint32_t frame_data_length)
 {
+    if(frame_data_length < MAC_HEADER_LEN + FCS_LEN){
+        printf("Payload is too small\n");
+        return {};
+    }
+
     // Extract the received FCS
     uint32_t received_fcs;
     memcpy(&received_fcs, frame + frame_data_length - 4, sizeof(received_fcs));

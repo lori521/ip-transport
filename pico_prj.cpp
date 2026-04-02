@@ -37,73 +37,32 @@ char destination_ip_address[15] = "192.168.100.2";
 using namespace std;
 
 void sender(Manchester &manchester) {
-  IPv4Sender ip(ip_settings);
 
   Ethernet ethernet;
   ethernet.init(source_mac_address, destination_mac_address, ether_type);
+  IPv4 ip(manchester, ethernet, ip_settings);
 
   while (1) {
-    ipv4_packet_batch_t batch;
-    if (ip.GeneratePackets(sending_data, destination_ip_address, batch) !=
-        true) {
-      printf("Could not generate packets\n");
-      continue;
-    }
-
-    for (auto packet : batch.ipv4_packets) {
-      // Encapsulate the payload into an Ethernet frame
-      vector<uint8_t> ip_payload = packet.dump_network_packet();
-      vector<uint8_t> frame =
-          ethernet.eth_encap(ip_payload.data(), ip_payload.size());
-
-      // DEBUG: printing the frame
-      manchester.send_debug_print(frame.data(), frame.size());
-
-      // Send the frame
-      manchester.send_manchester(frame.data(), frame.size());
-
-      sleep_ms(250);
-    }
+    ip.SendIPPacket(sending_data, destination_ip_address);
+    sleep_ms(250);
   }
 }
 
 void receiver(Manchester &manchester) {
-  IPv4Receiver ip(ip_settings);
   Ethernet ethernet;
   ethernet.init(destination_mac_address, source_mac_address, ether_type);
 
+  IPv4 ip(manchester, ethernet, ip_settings);
   while (1) {
-    // Expecting the same byte payload as the sender
-    uint8_t frame[MAX_FRAME_SIZE];
+    char src_addr[16];
+    vector<uint8_t> payload;
+    ip.ReadIPPacket(payload, src_addr);
 
-    memset(frame, 0, sizeof(frame));
-
-    // Receive the frame
-    uint32_t frame_len = manchester.recv_manchester(frame, MAX_FRAME_SIZE);
-
-    // DEBUG: printing the frame
-    manchester.recv_debug_print(frame, frame_len);
-
-    vector<uint8_t> decap_frame = ethernet.eth_decap(frame, frame_len);
-    if (decap_frame.size() == 0) {
-      continue;
+    string s;
+    for (uint8_t c : payload) {
+      s.push_back(c);
     }
-
-    ip.ReadPackets(decap_frame);
-
-    for (auto batch : ip.PopFinishedBatch()) {
-      vector<uint8_t> message;
-      batch.get_payload(message);
-
-      char src_addr[16];
-      encode_ip_address(batch.ipv4_packets.begin()->header.source_ip_address,
-                        src_addr);
-      printf("Received message from ip address %s: ", src_addr);
-      for (size_t i = 0; i < message.size(); i++) {
-        printf("%c", message[i]);
-      }
-      printf("\n");
-    }
+    printf("Received message from %s:\n\tMsg: %s\n", src_addr, s.c_str());
   }
 }
 
