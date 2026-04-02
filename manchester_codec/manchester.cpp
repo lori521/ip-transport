@@ -16,28 +16,29 @@ void Manchester::init(uint8_t tx_pin, uint8_t rx_pin, uint32_t baud_rate, uint32
     gpio_set_dir(this->rx_pin, GPIO_IN);
 }
 
-int Manchester::receive_manchester_bit(int first_half, int second_half) {
+int Manchester::receive_manchester_bit() {
+    busy_wait_us(this->clock_period_us >> 2);
+    int first_half = gpio_get(this->rx_pin);
+    
+    busy_wait_us(this->clock_period_us >> 1);
+    int second_half = gpio_get(this->rx_pin);
+    
+    busy_wait_us(this->clock_period_us >> 2); 
+
     if (first_half == 0 && second_half == 1) {
             return 1;
-        } else if (first_half == 1 && second_half == 0) {
-            return 0;
-        }
-        return -1;
+    } else if (first_half == 1 && second_half == 0) {
+        return 0;
+    }
+
+    return -1;
 }
 
 int Manchester::receive_manchester_byte()
 {
     int byte = 0;
     for (int i = 7; i >= 0; i--) {
-        busy_wait_us(this->clock_period_us / 4);
-        int first_half = gpio_get(this->rx_pin);
-        
-        busy_wait_us(this->clock_period_us / 2);
-        int second_half = gpio_get(this->rx_pin);
-        
-        busy_wait_us(this->clock_period_us / 4); 
-
-        int bit = Manchester::receive_manchester_bit(first_half, second_half);
+        int bit = Manchester::receive_manchester_bit();
         if (bit == -1) {
             return -1;
         }
@@ -71,11 +72,14 @@ void Manchester::send_manchester_byte(int byte)
 
 void Manchester::send_debug_print(uint8_t *frame, size_t length)
 {
-    printf("Sending frame (hex): ");
+    string s;
+    char hex[4];
+    
     for (size_t i = 0; i < length; i++) {
-        printf("%02X ", frame[i]);
+        sprintf(hex, "%02X ", frame[i]);
+        s.append(hex);
     }
-    printf("\n");
+    printf("Sending frame (hex): %s\n", s.c_str());
 }
 
 void Manchester::send_manchester(uint8_t *data, uint32_t length)
@@ -96,15 +100,88 @@ vector<uint8_t> Manchester::add_preamble(uint8_t *frame, size_t length)
     return frame_with_preamble;
 }
 
+bool Manchester::sync_clock(){
+    // Sample first period
+    uint64_t start;
+    uint64_t end;
+
+    int last = gpio_get(this->rx_pin);
+    int now = last;
+    
+    while(last == now){
+        last = now;
+        now = gpio_get(this->rx_pin);
+    }
+    // I discard first edge since it can be cause by data before
+    
+    last = gpio_get(this->rx_pin);
+    while(last == now){
+        last = now;
+        now = gpio_get(this->rx_pin);
+    }
+    
+
+    start = to_us_since_boot(get_absolute_time());
+
+    last = gpio_get(this->rx_pin);
+    while(last == now){
+        last = now;
+        now = gpio_get(this->rx_pin);
+    }
+
+    end = to_us_since_boot(get_absolute_time()); 
+
+    this->clock_period_us = end - start;
+    start = end;
+    
+    uint8_t expected = (last == 0 && now == 1)? 0 : 1;
+    for(int i = 0; i < 7; i++){
+
+        last = gpio_get(this->rx_pin);
+        while(last == now){
+            last = now;
+            now = gpio_get(this->rx_pin);
+        }
+
+        end = to_us_since_boot(get_absolute_time());
+
+        this->clock_period_us += end - start;
+        this->clock_period_us >>= 1;
+        start = end;
+        
+        if((last == 0 && now == 1) && expected == 0){
+            return false;
+        }else if((last == 1 && now == 0) && expected == 1){
+            return false;
+        }
+
+        expected = expected == 1? 0 : 1;
+    }
+
+    // This should syncronize me to the begining of the next bit
+    busy_wait_us(this->clock_period_us >> 1);
+    return true;
+}
+
 void Manchester::wait_for_preamble()
 {
-    size_t matched = 0;
-    while (matched < PREAMBLE_LEN) {
-        uint8_t byte = receive_manchester_byte();
-        if (byte == preamble[matched]) {
-            matched++;
-        } else {
-            matched = (byte == preamble[0]) ? 1 : 0;
+    // try to sync clock on the preamble
+    bool success = false;
+    while(!success){
+        success = true;
+        if(!sync_clock()){
+            success = false;
+            continue;
+        }
+        
+        int byte = 0;
+        while(byte != 0xD5){
+            int bit = receive_manchester_bit();
+            if(bit == -1){
+                success = false;
+                break;
+            }
+            byte = ((byte << 1) | bit) & 0xFF;
         }
     }
 }
@@ -126,9 +203,12 @@ uint32_t Manchester::recv_manchester(uint8_t *data, uint32_t max_length)
 
 void Manchester::recv_debug_print(uint8_t *data, uint32_t length)
 {
-    printf("Received frame (hex): ");
+    string s;
+    char hex[4];
+    
     for (size_t i = 0; i < length; i++) {
-        printf("%02X ", data[i]);
+        sprintf(hex, "%02X ", data[i]);
+        s.append(hex);
     }
-    printf("\n");
+    printf("Received frame (hex): %s\n", s.c_str());
 }
