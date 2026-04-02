@@ -131,6 +131,13 @@ bool ipv4_packet_header::read_raw(std::vector<uint8_t> raw) {
   this->options = ipv4_options_t(std::vector<uint8_t>(
       raw.begin() + FIXED_PART_HEADER_SIZE, raw.begin() + header_length_bytes));
 
+  // Test checksum
+  // destination_ip_address++;
+
+  if (header_check_sum != calculate_checksum()) {
+    printf("IP header checksum does not match\n");
+    return false;
+  }
   return true;
 }
 
@@ -163,8 +170,27 @@ ipv4_packet_header::ipv4_packet_header(uint16_t payload_size,
   this->protocol = settings.protocol;
   this->source_ip_address = settings.device_ip_address;
   this->destination_ip_address = destination;
-  // Checksum is calculated at the end
+  this->header_check_sum = calculate_checksum();
+}
+
+uint16_t ipv4_packet_header::calculate_checksum() {
+  uint16_t preserve_checksum = this->header_check_sum;
   this->header_check_sum = 0;
+
+  std::vector<uint8_t> bytes = this->dump_network_header();
+  if ((bytes.size() & 1) == 1) {
+    bytes.push_back(0);
+  }
+
+  uint32_t sum = 0;
+  for (int i = 0; i < bytes.size(); i += 2) {
+    uint16_t word = read_uint16_n(bytes, i);
+    sum += word;
+    sum = (sum & 0b1111111111111111) + (sum >> 16);
+  }
+
+  this->header_check_sum = preserve_checksum;
+  return (~sum) & 0b1111111111111111;
 }
 
 void ipv4_packet_header::debug() {

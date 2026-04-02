@@ -38,4 +38,5 @@ struct ipv4_packet_header {
   ipv4_packet_header(uint16_t payload_size, ipv4_fragment_info_t fragment_info,
                      uint32_t destination, ipv4_settings_t &settings);
   void debug();
+  uint16_t calculate_checksum();
 };

@@ -40,6 +40,9 @@ void sender(Manchester &manchester) {
 
   Ethernet ethernet;
   ethernet.init(source_mac_address, destination_mac_address, ether_type);
+  
+  ip_settings.allow_fragmentation = true;
+  ip_settings.max_fragment_len = 28;
   IPv4 ip(manchester, ethernet, ip_settings);
 
   while (1) {

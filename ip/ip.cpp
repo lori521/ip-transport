@@ -39,21 +39,6 @@ ipv4_packet_t::ipv4_packet_t(std::vector<uint8_t> payload,
   this->header =
       ipv4_packet_header(payload.size(), fragment_info, destination, settings);
   this->data = payload;
-
-  // Calculate checksum
-  std::vector<uint8_t> bytes = this->dump_network_packet();
-  if ((bytes.size() & 1) == 0) {
-    bytes.push_back(0);
-  }
-
-  uint32_t sum = 0;
-  for (int i = 0; i < bytes.size(); i += 2) {
-    uint16_t word = read_uint16_n(bytes, i);
-    sum += word;
-    sum = (sum & 0b1111111111111111) + (sum >> 16);
-  }
-
-  this->header.header_check_sum = (~sum) & 0b1111111111111111;
 }
 
 // This throws error if:
@@ -105,7 +90,8 @@ bool IPv4::GeneratePackets(std::vector<uint8_t> &payload, char *destination,
 
       std::vector<uint8_t> fragment_payload(
           payload.begin() + (i * packet_payload_size),
-          payload.begin() + ((i + 1) * packet_payload_size));
+          payload.begin() +
+              min(((i + 1) * packet_payload_size), payload.size()));
 
       ipv4_packet_t packet = ipv4_packet_t(fragment_payload, fragment_info,
                                            destination_addr, settings);
@@ -188,7 +174,7 @@ bool IPv4::ReadPackets(std::vector<uint8_t> &data) {
   ipv4_packet_t packet;
 
   if (!packet.read_raw(data)) {
-    printf("Could not parse data in payload");
+    printf("Could not parse data in payload\n");
     return false;
   }
 
