@@ -12,7 +12,7 @@ ipv4_options_t::ipv4_options_t(std::vector<uint8_t> raw_data) {
 }
 
 // Gets the options size in bytes
-size_t ipv4_options_t::size() { return this->data.size(); }
+size_t ipv4_options_t::size() const { return this->data.size(); }
 
 // IPv4 Header
 
@@ -145,9 +145,8 @@ bool ipv4_packet_header::read_raw(std::vector<uint8_t> raw) {
 ipv4_packet_header::ipv4_packet_header(uint16_t payload_size,
                                        ipv4_fragment_info_t fragment_info,
                                        uint32_t destination,
-                                       ipv4_settings_t &settings) {
-
-  this->options = settings.options;
+                                       ipv4_settings_t &settings,
+                                       const ipv4_options_t &options) {
 
   this->version = 4;
 
@@ -172,7 +171,12 @@ ipv4_packet_header::ipv4_packet_header(uint16_t payload_size,
   this->destination_ip_address = destination;
   this->header_check_sum = calculate_checksum();
 }
-
+ipv4_packet_header::ipv4_packet_header(uint16_t payload_size,
+                                       ipv4_fragment_info_t fragment_info,
+                                       uint32_t destination,
+                                       ipv4_settings_t &settings)
+    : ipv4_packet_header(payload_size, fragment_info, destination, settings,
+                         ipv4_options_t()) {}
 uint16_t ipv4_packet_header::calculate_checksum() {
   uint16_t preserve_checksum = this->header_check_sum;
   this->header_check_sum = 0;

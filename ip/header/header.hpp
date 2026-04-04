@@ -4,6 +4,18 @@
 #include <cstdint>
 #include <vector>
 
+// This is just a wrapper over vector, but I can add functionalities later to it
+struct ipv4_options_t {
+  std::vector<uint8_t> data = {};
+
+  std::vector<uint8_t> dump_options();
+
+  ipv4_options_t() = default;
+  ipv4_options_t(std::vector<uint8_t> raw_data);
+
+  size_t size() const;
+};
+
 struct ipv4_fragment_info_t {
   bool is_fragmented;
   uint16_t fragment_id;
@@ -37,6 +49,9 @@ struct ipv4_packet_header {
   bool read_raw(std::vector<uint8_t> raw);
   ipv4_packet_header(uint16_t payload_size, ipv4_fragment_info_t fragment_info,
                      uint32_t destination, ipv4_settings_t &settings);
+  ipv4_packet_header(uint16_t payload_size, ipv4_fragment_info_t fragment_info,
+                     uint32_t destination, ipv4_settings_t &settings,
+                     const ipv4_options_t &options);
   void debug();
   uint16_t calculate_checksum();
 };

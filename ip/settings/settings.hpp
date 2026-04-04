@@ -1,8 +1,8 @@
 #pragma once
 #include "header/header.hpp"
 #include "utils/utils.hpp"
-#include <cstdio>
 #include <cstdint>
+#include <cstdio>
 #include <cstdlib>
 
 #include "header/header.hpp"
@@ -10,32 +10,20 @@
 const size_t MAX_IP_PACKET_SIZE = ((1 << 16) - 1);
 
 enum service_type_t {
-    LOW_DELAY = 1 << 3,
-    HIGH_THROUGHPUT = 1 << 4,
-    HIGH_RELIABILITY = 1 << 5,
+  LOW_DELAY = 1 << 3,
+  HIGH_THROUGHPUT = 1 << 4,
+  HIGH_RELIABILITY = 1 << 5,
 };
 
 enum ipv4_header_protocol_t {
-    ICMP = 1,
-    TCP = 6,
-    UDP = 17,
+  ICMP = 1,
+  TCP = 6,
+  UDP = 17,
 };
 
 enum ipv4_fragment_options_t {
-    DO_NOT_FRAGMENT = 1 << 1,
-    MORE_FRAGMENTS = 1 << 2
-};
-
-// This is just a wrapper over vector, but I can add functionalities later to it
-struct ipv4_options_t {
-    std::vector<uint8_t> data = {};
-
-    std::vector<uint8_t> dump_options();
-
-    ipv4_options_t()= default;
-    ipv4_options_t(std::vector<uint8_t> raw_data);
-
-    size_t size();
+  DO_NOT_FRAGMENT = 1 << 1,
+  MORE_FRAGMENTS = 1 << 2
 };
 
 struct ipv4_settings_t {
@@ -49,14 +37,12 @@ struct ipv4_settings_t {
   bool allow_fragmentation = false;
   size_t max_fragment_len = MAX_IP_PACKET_SIZE;
 
-  ipv4_options_t options;
-
   ipv4_settings_t(char ip_address[15], ipv4_header_protocol_t protocol)
       : protocol(protocol) {
 
     if (decode_ip_address(ip_address, this->device_ip_address) == false) {
-        std::printf("IP Address wrongly formatted\n");
-        std::exit(1);
+      std::printf("IP Address wrongly formatted\n");
+      std::exit(1);
     }
   }
 };

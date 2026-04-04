@@ -35,9 +35,10 @@ bool ipv4_packet_t::read_raw(std::vector<uint8_t> raw) {
 
 ipv4_packet_t::ipv4_packet_t(std::vector<uint8_t> payload,
                              ipv4_fragment_info_t fragment_info,
-                             uint32_t destination, ipv4_settings_t &settings) {
-  this->header =
-      ipv4_packet_header(payload.size(), fragment_info, destination, settings);
+                             uint32_t destination, ipv4_settings_t &settings,
+                             const ipv4_options_t &ip_options) {
+  this->header = ipv4_packet_header(payload.size(), fragment_info, destination,
+                                    settings, ip_options);
   this->data = payload;
 }
 
@@ -46,7 +47,8 @@ ipv4_packet_t::ipv4_packet_t(std::vector<uint8_t> payload,
 // - allow_fragmentation is true, but network max_len is smaller than a minimum
 // size
 bool IPv4::GeneratePackets(std::vector<uint8_t> &payload, char *destination,
-                           ipv4_packet_batch_t &batch) {
+                           ipv4_packet_batch_t &batch,
+                           const ipv4_options_t &ip_options) {
   uint32_t destination_addr;
   if (decode_ip_address(destination, destination_addr) == false) {
     printf("Could not parse destination addr\n");
@@ -56,23 +58,23 @@ bool IPv4::GeneratePackets(std::vector<uint8_t> &payload, char *destination,
   batch.packet_id = random();
 
   if (!this->settings.allow_fragmentation) {
-    if (payload.size() + settings.options.size() +
+    if (payload.size() + ip_options.size() +
             ipv4_packet_header::FIXED_PART_HEADER_SIZE >
         settings.max_fragment_len) {
       std::printf(
           "Throwing packet, does not respect fragmentation constraints\n");
       return false;
     }
-  } else if (payload.size() + settings.options.size() +
+  } else if (payload.size() + ip_options.size() +
                  ipv4_packet_header::FIXED_PART_HEADER_SIZE >
              settings.max_fragment_len) {
 
     // Send multiple packets with size aligned to 8 bytes
-    size_t packet_payload_size = (((settings.max_fragment_len -
-                                    ipv4_packet_header::FIXED_PART_HEADER_SIZE -
-                                    settings.options.size()) >>
-                                   3)
-                                  << 3);
+    size_t packet_payload_size =
+        (((settings.max_fragment_len -
+           ipv4_packet_header::FIXED_PART_HEADER_SIZE - ip_options.size()) >>
+          3)
+         << 3);
     if (packet_payload_size == 0) {
       std::printf(
           "Cannot fragment this package max_fragment_len is too small\n");
@@ -93,8 +95,9 @@ bool IPv4::GeneratePackets(std::vector<uint8_t> &payload, char *destination,
           payload.begin() +
               min(((i + 1) * packet_payload_size), payload.size()));
 
-      ipv4_packet_t packet = ipv4_packet_t(fragment_payload, fragment_info,
-                                           destination_addr, settings);
+      ipv4_packet_t packet =
+          ipv4_packet_t(fragment_payload, fragment_info, destination_addr,
+                        settings, ip_options);
       batch.add_packet(packet);
     }
 
@@ -108,11 +111,15 @@ bool IPv4::GeneratePackets(std::vector<uint8_t> &payload, char *destination,
                            .fragment_offset = 0,
                            .is_last = true};
 
-  ipv4_packet_t packet =
-      ipv4_packet_t(payload, fragment_info, destination_addr, settings);
+  ipv4_packet_t packet = ipv4_packet_t(payload, fragment_info, destination_addr,
+                                       settings, ip_options);
   batch.add_packet(packet);
 
   return true;
+}
+bool IPv4::GeneratePackets(std::vector<uint8_t> &payload, char destination[],
+                           ipv4_packet_batch_t &batch) {
+  return this->GeneratePackets(payload, destination, batch, ipv4_options_t());
 }
 
 bool ipv4_packet_batch_t::add_packet(ipv4_packet_t packet) {
