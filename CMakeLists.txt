@@ -95,7 +95,9 @@ pico_enable_stdio_usb(pico_prj 1)
 
 # Add the standard library to the build
 target_link_libraries(pico_prj
-        pico_stdlib)
+        pico_stdlib
+        pico_multicore
+)
 
 target_link_libraries(pico_prj
         manchester_codec)

@@ -28,7 +28,7 @@ public:
     void init(const uint8_t* source_mac_address, const uint8_t* destination_mac_address, uint16_t type);
 
     vector<uint8_t> eth_encap(uint8_t *payload, uint32_t payload_len);
-    vector<uint8_t> eth_decap(uint8_t *frame, uint32_t frame_data_length, uint32_t exp_len);
+    vector<uint8_t> eth_decap(uint8_t *frame, uint32_t frame_data_length);
 };
 
 #endif // ETHERNET_HPP
