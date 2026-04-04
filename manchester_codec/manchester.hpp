@@ -17,16 +17,18 @@ private:
     uint8_t rx_pin;
     uint32_t baud_rate;
     uint32_t clock_period_us;
-    const uint8_t preamble[8] = { 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAB };
+    const uint8_t preamble[8] = { 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0xD5 };
 
     // Manchester encoding/decoding functions
-    int receive_manchester_bit(int first_half, int second_half);
+    int receive_manchester_bit();
     int receive_manchester_byte();
     void send_manchester_bit(int bit);
     void send_manchester_byte(int byte);
 
     // Sync functions
     vector<uint8_t> add_preamble(uint8_t *frame, size_t length);
+
+    bool sync_clock();
     void wait_for_preamble();
 public:
     void init(uint8_t tx_pin, uint8_t rx_pin, uint32_t baud_rate, uint32_t clock_period_us);
@@ -36,7 +38,7 @@ public:
     void send_manchester(uint8_t *data, uint32_t length);
 
     // Receive functions
-    void recv_manchester(uint8_t *data, uint32_t length);
+    uint32_t recv_manchester(uint8_t *data, uint32_t max_length);
     void recv_debug_print(uint8_t *data, uint32_t length);
 };
 
