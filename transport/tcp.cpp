@@ -1,56 +1,82 @@
 #include "tcp_header.hpp"
 
-#include "tcp.hpp"
-#include <cstring>
-
 // TODO: implement tcp_window_size dynamic algorithm -> later
 // tcp header -> tcp header + data -> pseudo-header + tcp header + data -> checksum
 
-// TODO: implement constructor for tcp pseudo-header
-tcp_pseudoheader::tcp_pseudoheader(const char* source_ip_address , const char* destination_ip_address, uint8_t PTCL) {
-    memcpy(this->source_address, source_ip_address, sizeof(source_ip_address));
-    memcpy(this->destination_address, destination_ip_address, sizeof(destination_ip_address));
-    memset(this->zero,0, sizeof(zero));
-    this->PTCL = PTCL;
+/* TCP_PSEUDOHEADER */
+
+// TODO: implement constructor for tcp pseudo-header without parameters
+tcp_pseudoheader::tcp_pseudoheader() {
+    memset(this, 0, sizeof(tcp_pseudoheader));
 }
 
-// TODO: implement constructor for tcp header
-tcp_header::tcp_header(uint16_t sp, uint16_t dp) {
-    memcpy(this->source_port, sp, sizeof(sp));
-    memcpy(this->destination_port, dp, sizeof(dp));
-    this->sequence_number = rand();
+// // TODO: implement constructor for tcp pseudo-header with parameters
+tcp_pseudoheader::tcp_pseudoheader(uint32_t source_ip, uint32_t destination_ip, uint16_t tcp_length) {
+    this->source_address = source_ip;
+    this->destination_address = destination_ip;
+    this->tcp_length = tcp_length;
+    this->zero = 0;
+    // number used for TCP protocol
+    this->PTCL = 6;
+}
+
+/* TCP_HEADER */
+// TODO: implement constructor for tcp header without parameters
+tcp_header::tcp_header() {
+    memset(this, 0, sizeof(tcp_header));
+}
+
+// function to generate a random sequence number
+uint32_t generate_random_sequence_number() {
+    return rand();
+}
+
+// TODO: implement constructor for tcp header with parameters
+tcp_header::tcp_header(uint16_t source_port, uint16_t destination_port) {
+    this->source_port = source_port;
+    this->destination_port = destination_port;
+    this->sequence_number = generate_random_sequence_number();
     this->ack_number = 0;
-    this->data_offset = 5;
-    this->reserved = 0;
-    // switch with algorithm
-    this->window = 20000;
+    this->data_offset_and_reserved = 5;
+    this->flags = 0;
+    this->window = 65535;
     this->checksum = 0;
     this->urgent_pointer = 0;
+    // what do i do with options?
 }
 
+/* TCP_PACKAGE */
 // TODO: implement constructor for tcp package
 tcp_package::tcp_package(tcp_pseudoheader pshdr, tcp_header hdr, char* new_payload) {
-    this->speudo_hdr = pshdr;
     this->tcp_hdr = hdr;
     this->payload = static_cast<char *>(calloc(PAYLOAD_LENGTH, sizeof(char)));
-    this->payload = new_payload;
+    memcpy(this->payload ,new_payload, sizeof(new_payload));
     // TODO: calculate checksum for whole package
+
 }
 
-// TODO: write check_sum algorithm
-uint16_t tcp_package::checksum(uint16_t *hdr_addr, int size) {
+// TODO: write check_sum algorithm -> modify with FEC for better transmission
+uint16_t tcp_package::checksum(tcp_pseudoheader *pshdr_addr, tcp_package *package_addr, int packet_size) {
      uint32_t sum = 0;
+    // loop through the pseudo-header and add to the sum
+    int pshdr_size = sizeof(tcp_pseudoheader);
+
+    while (pshdr_size > 1) {
+        sum += (*reinterpret_cast<uint8_t*>(pshdr_addr))++;
+        pshdr_size -= 2;
+    }
+    // no left-over byte because the number of bytes in this is even
 
     // loop through the package and add to the sum
-    while (size > 1) {
-        sum += *hdr_addr++;
-        size -= 2;
+    while (packet_size > 1) {
+        sum += *package_addr++;
+        packet_size -= 2;
     }
 
     // check if there is a left-over byte (odd number of bytes)
-    if (size > 0)
+    if (packet_size > 0)
         // sort of padding
-        sum += (*reinterpret_cast<uint8_t*>(hdr_addr));
+        sum += *reinterpret_cast<uint8_t*>(package_addr);
 
     // fold sum from uint32_t -> uint16_t
     while (sum >> 16) {

@@ -4,72 +4,72 @@
 #include <stdint.h>
 #include <unistd.h>
 #include <iostream>
+#include <arpa/inet.h>
+#include <cstdlib>
 
 using namespace std;
 
-#define PORT_LENGTH 16
-#define SEQUENCE_LENGTH 32
-#define ACK_NUMBER_LENGTH 32
-#define OFFSET_LENGTH 4
-#define RESERVED 4
-#define WINDOW_LENGTH 16
-#define CHECKSUM_LENGTH 16
-#define URGENT_POINTER_LENGTH 16
+// payload and mask
 #define PAYLOAD_LENGTH 65535
 #define CHECK_SUM_MASK 0xFFFF
+
+// flags
+#define TCP_FIN 0x01
+#define TCP_SYN 0x02
+#define TCP_RST 0x04
+#define TCP_PSH 0x08
+#define TCP_ACK 0x10
+#define TCP_URG 0x20
+#define TCP_ECE 0x40
+#define TCP_CWR 0x80
 // OPTIONS_LENGTH -> size(Options) == (DOffset-5)*32
 // PAYLOAD_LENGTH -> variable
 
 // control_bits default values -> 0
-struct control_bits_t {
-    uint8_t CWR : 1 = 0;
-    uint8_t ECE : 1 = 0;
-    uint8_t URG : 1 = 0;
-    uint8_t ACK : 1 = 0;
-    uint8_t PSH : 1 = 0;
-    uint8_t PST : 1 = 0;
-    uint8_t SYN : 1 = 0;
-    uint8_t FIN : 1 = 0;
-};
 
 class tcp_header {
-    uint16_t source_port : PORT_LENGTH;
-    uint16_t destination_port : PORT_LENGTH;
-    uint32_t sequence_number : SEQUENCE_LENGTH;
-    uint32_t ack_number : ACK_NUMBER_LENGTH;
-    uint8_t data_offset : OFFSET_LENGTH;
-    uint8_t reserved : RESERVED;
-    control_bits_t control_bits;
-    uint16_t window : WINDOW_LENGTH;
-    uint16_t checksum : CHECKSUM_LENGTH;
-    uint16_t urgent_pointer : URGENT_POINTER_LENGTH = 0;
+    uint16_t source_port;
+    uint16_t destination_port;
+    uint32_t sequence_number;
+    uint32_t ack_number;
+    uint8_t data_offset_and_reserved;
+    uint8_t flags;
+    uint16_t window;
+    uint16_t checksum;
+    uint16_t urgent_pointer;
     char options[];
 
 public:
     tcp_header();
-};
+    tcp_header(uint16_t source_port, uint16_t destination_port);
+} __attribute__((packed));
 
-// IPv4 pseudo-header -> 96 bits
+// IPv4 pseudo-header -> 96 bits(12 bytes)
 // protection against misrouted segments
 struct tcp_pseudoheader {
-    uint32_t source_address : 32;
-    uint32_t destination_address : 32;
-    uint8_t zero : 8;
-    uint8_t PTCL : 8;
-    uint16_t tcp_length : 16;
+    uint32_t source_address;
+    uint32_t destination_address;
+    uint8_t zero;
+    uint8_t PTCL;
+    uint16_t tcp_length;
 
     tcp_pseudoheader();
-};
+    tcp_pseudoheader(uint32_t source_ip, uint32_t destination_ip, uint16_t tcp_length);
+} __attribute__((packed));
 
 // TCP Package -> IPv4 pseudo-header + TCP Header + payload
 struct tcp_package {
-    tcp_pseudoheader speudo_hdr;
     tcp_header tcp_hdr;
-    char* payload;
+    uint8_t* payload;
+    uint16_t payload_length;
 
     tcp_package();
-    uint16_t checksum();
-};
+    tcp_package(tcp_header* hdr, uint8_t* payload, uint16_t payload_length);
+
+} __attribute__((packed));
+
+uint16_t checksum(tcp_pseudoheader* pshdr, tcp_header* hdr, uint8_t* payload, uint16_t payload_length);
+uint32_t generate_random_sequence_number();
 
 
 #endif // TCP_HPP
