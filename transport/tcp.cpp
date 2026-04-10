@@ -49,21 +49,21 @@ tcp_header::tcp_header(uint16_t source_port, uint16_t destination_port) {
 }
 
 // TODO: implement function to set flag into the header
-tcp_header::set_flag(uint8_t new_flag) {
+void tcp_header::set_flag(uint8_t new_flag) {
     this->flags |= new_flag;
 }
 
 // TODO: implement function to find data offset
-tcp_header::get_data_offset() {
+uint8_t tcp_header::get_data_offset() {
     return (this->data_offset_and_reserved >> 4) & MASK_FOR_OFFSET;
 }
 
 // TODO: implement get/set method for checksum
-tcp_header::get_checksum() {
+uint16_t tcp_header::get_checksum() {
     return this->checksum;
 }
 
-tcp_header::set_checksum(int value) {
+void tcp_header::set_checksum(int value) {
     this->checksum = value;
 }
 

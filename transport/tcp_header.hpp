@@ -27,7 +27,18 @@ using namespace std;
 // OPTIONS_LENGTH -> size(Options) == (DOffset-5)*32
 // PAYLOAD_LENGTH -> variable
 
-// control_bits default values -> 0
+// IPv4 pseudo-header -> 96 bits(12 bytes)
+// protection against misrouted segments
+struct tcp_pseudoheader {
+    uint32_t source_address;
+    uint32_t destination_address;
+    uint8_t zero;
+    uint8_t PTCL;
+    uint16_t tcp_length;
+
+    tcp_pseudoheader();
+    tcp_pseudoheader(uint32_t source_ip, uint32_t destination_ip, uint16_t tcp_length);
+} __attribute__((packed));
 
 class tcp_header {
     uint16_t source_port;
@@ -47,24 +58,11 @@ public:
     tcp_header(uint16_t source_port, uint16_t destination_port);
 
     // auxiliar functions to modify header fields
-    set_flag(uint8_t new_flag);
-    get_data_offset();
-    get_checksum();
-    set_checksum(int value);
+    void set_flag(uint8_t new_flag);
+    uint8_t get_data_offset();
+    uint16_t get_checksum();
+    void set_checksum(int value);
     uint16_t caluculate_checksum(tcp_pseudoheader* pshdr, tcp_header* hdr, uint8_t* payload, uint16_t payload_length);
-} __attribute__((packed));
-
-// IPv4 pseudo-header -> 96 bits(12 bytes)
-// protection against misrouted segments
-struct tcp_pseudoheader {
-    uint32_t source_address;
-    uint32_t destination_address;
-    uint8_t zero;
-    uint8_t PTCL;
-    uint16_t tcp_length;
-
-    tcp_pseudoheader();
-    tcp_pseudoheader(uint32_t source_ip, uint32_t destination_ip, uint16_t tcp_length);
 } __attribute__((packed));
 
 // TCP Package -> TCP Header + payload
