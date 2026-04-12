@@ -35,15 +35,15 @@ uint32_t generate_random_sequence_number() {
 // TODO: implement constructor for tcp header with parameters
 tcp_header::tcp_header(uint16_t source_port, uint16_t destination_port) {
     this->source_port = htons(source_port);
-    this->destination_port = destination_port;
-    this->sequence_number = generate_random_sequence_number();
-    this->ack_number = 0;
+    this->destination_port = htons(destination_port);
+    this->sequence_number = htonl(generate_random_sequence_number());
+    this->ack_number = htonl(0);
     this->data_offset_and_reserved = (5 << 4);
     this->flags = 0;
     this->window = htons(65535);
     // IMPORTANT -> checksum set to 0
     this->checksum = 0;
-    this->urgent_pointer = 0;
+    this->urgent_pointer = htons(0);
     // what do i do with options?
 }
 
@@ -95,7 +95,7 @@ bool tcp_header::read_raw_header(uint8_t* raw_data) {
 tcp_package::tcp_package() {}
 
 // TODO: implement constructor for tcp package with parameters
-tcp_package::tcp_package(tcp_pseudoheader pshdr, tcp_header hdr, char* new_payload, int payload_length) {
+tcp_package::tcp_package(tcp_pseudoheader pshdr, tcp_header hdr, uint8_t* new_payload, int payload_length) {
     // add header to package
     this->tcp_hdr = hdr;
 
@@ -103,7 +103,7 @@ tcp_package::tcp_package(tcp_pseudoheader pshdr, tcp_header hdr, char* new_paylo
     this->payload_length = payload_length;
 
     // allocate space for payload
-    this->payload = static_cast<char *>(calloc(PAYLOAD_LENGTH, sizeof(char)));
+    this->payload = static_cast<uint8_t *>(calloc(PAYLOAD_LENGTH, sizeof(uint8_t)));
 
     // check payload length to put inside packet
     int copy_payload_length = 0;
@@ -116,13 +116,13 @@ tcp_package::tcp_package(tcp_pseudoheader pshdr, tcp_header hdr, char* new_paylo
     // calculate checksum for whole package
     this->tcp_hdr.set_checksum(0);
 
-    uint16_t new_checksum = this->caluculate_checksum(pshdr, &this->tcp_hdr, this->payload, copy_payload_length);
+    uint16_t new_checksum = this->tcp_hdr.caluculate_checksum(&pshdr, &this->tcp_hdr, this->payload, copy_payload_length);
     this->tcp_hdr.set_checksum(new_checksum);
 }
 
 // TODO: write check_sum algorithm -> modify with FEC for better transmission
-uint16_t tcp_package::caluculate_checksum(tcp_pseudoheader *pshdr_addr, tcp_header *hdr_addr, char *payload_addr, int payload_size) {
-     uint32_t sum = 0;
+uint16_t tcp_header::caluculate_checksum(tcp_pseudoheader *pshdr_addr, tcp_header *hdr_addr, uint8_t *payload_addr, int payload_size) {
+    uint32_t sum = 0;
 
     // loop through the pseudo-header first and add to the sum
     uint16_t *pshdr_ptr = reinterpret_cast<uint16_t*>(pshdr_addr);
@@ -136,7 +136,7 @@ uint16_t tcp_package::caluculate_checksum(tcp_pseudoheader *pshdr_addr, tcp_head
 
     // loop through the tcp header and add to the sum
     uint16_t *hdr_ptr = reinterpret_cast<uint16_t*>(hdr_addr);
-    int hdr_size = sizeof(tcp_hdr);
+    int hdr_size = sizeof(tcp_header);
 
     while (hdr_size > 1) {
         sum += *hdr_ptr++;
