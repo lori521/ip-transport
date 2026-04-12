@@ -219,7 +219,27 @@ bool tcp_package::decapsulate_package(tcp_pseudoheader *pshdr_addr, uint8_t *raw
 }
 
 // TODO: write encapsulate packet
+uint8_t* tcp_package::encapsulate_package(uint16_t &package_length) {
+    // set package_length
+    package_length = this->tcp_hdr.get_data_offset() * 4 + this->payload_length;
+
+    // allocate send_buffer(boy goin up the wire)
+    uint8_t *send_buffer = static_cast<uint8_t *>(calloc(package_length, sizeof(uint8_t)));
+    if (send_buffer == nullptr) {
+        printf("could not allocate space for send_buffer :/\n");
+        return nullptr;
+    }
+
+    // copy header in send_buffer
+    memcpy(send_buffer, &this->tcp_hdr, sizeof(tcp_hdr));
+
+    // copy payload
+    memcpy(send_buffer + this->tcp_hdr.get_data_offset() * 4, this->payload, this->payload_length);
+
+    return send_buffer;
+}
 
 int main() {
+
     return 0;
 }
