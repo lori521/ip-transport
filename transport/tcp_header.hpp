@@ -60,6 +60,10 @@ public:
 
     // auxiliar functions to modify header fields
     void set_flag(uint8_t new_flag);
+    void set_sequence(uint32_t new_seq_number);
+    void set_ack_number(uint32_t new_ack_number);
+    uint32_t get_sequence();
+    uint8_t get_flag();
     uint8_t get_data_offset();
     uint16_t get_checksum();
     void set_checksum(int value);
@@ -67,17 +71,18 @@ public:
     bool read_raw_header(uint8_t* raw_data);
 } __attribute__((packed));
 
-// TCP Package -> TCP Header + payload
-struct tcp_package {
+// TCP Packet -> TCP Header + payload
+struct tcp_packet {
     tcp_header tcp_hdr;
     uint8_t* payload;
     uint16_t payload_length;
 
-    tcp_package();
-    tcp_package(tcp_pseudoheader pshdr, tcp_header hdr, uint8_t* new_payload, int payload_length);
+    tcp_packet();
+    tcp_packet(tcp_pseudoheader pshdr, tcp_header hdr, uint8_t* new_payload, int payload_length);
     bool decapsulate_package(tcp_pseudoheader *pshdr_addr, uint8_t *raw_buffer, uint16_t raw_buffer_length);
     uint8_t* encapsulate_package(uint16_t &package_length);
     void free_package();
+    bool establish_connection_receiver(int socketfd, tcp_pseudoheader *pshdr_addr, uint16_t dest_port, uint16_t src_port);
 } __attribute__((packed));
 
 uint32_t generate_random_sequence_number();

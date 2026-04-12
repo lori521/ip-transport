@@ -51,6 +51,26 @@ void tcp_header::set_flag(uint8_t new_flag) {
     this->flags |= new_flag;
 }
 
+// TODO: implement function to set new ack number
+void tcp_header::set_ack_number(uint32_t new_ack_number) {
+    this->ack_number = htonl(new_ack_number);
+}
+
+// TODO: implement function to set new seq number
+void tcp_header::set_sequence(uint32_t new_seq_number) {
+    this->sequence_number = htonl(new_seq_number);
+}
+
+// TODO: implement function to get sequence number
+uint32_t tcp_header::get_sequence() {
+    return this->sequence_number;
+}
+
+// TODO: implement function to get flags
+uint8_t tcp_header::get_flag() {
+    return this->flags;
+}
+
 // TODO: implement function to find data offset
 uint8_t tcp_header::get_data_offset() {
     return (this->data_offset_and_reserved >> 4) & MASK_FOR_OFFSET;
@@ -91,10 +111,10 @@ bool tcp_header::read_raw_header(uint8_t* raw_data) {
 
 /* ---------------------------------- TCP_PACKAGE ------------------------------------- */
 // TODO: implement constructor for tcp package without parameters
-tcp_package::tcp_package() {}
+tcp_packet::tcp_packet() {}
 
 // TODO: implement constructor for tcp package with parameters
-tcp_package::tcp_package(tcp_pseudoheader pshdr, tcp_header hdr, uint8_t* new_payload, int payload_length) {
+tcp_packet::tcp_packet(tcp_pseudoheader pshdr, tcp_header hdr, uint8_t* new_payload, int payload_length) {
     // add header to package
     this->tcp_hdr = hdr;
 
@@ -163,14 +183,14 @@ uint16_t tcp_header::caluculate_checksum(tcp_pseudoheader *pshdr_addr, tcp_heade
     return ~sum;
 }
 
-void tcp_package::free_package() {
+void tcp_packet::free_package() {
     if (this->payload != nullptr)
         free(this->payload);
 }
 
 // TODO: write decapsulate packet
 // receive from network -> [ tcp_header | payload ] (20/max PAYLOAD_LENGTH bytes)
-bool tcp_package::decapsulate_package(tcp_pseudoheader *pshdr_addr, uint8_t *raw_buffer, uint16_t raw_buffer_length) {
+bool tcp_packet::decapsulate_package(tcp_pseudoheader *pshdr_addr, uint8_t *raw_buffer, uint16_t raw_buffer_length) {
     // checksum verification for received packet
     // get received checksum
     uint16_t old_checksum = ntohs(*(uint16_t*)(raw_buffer + 16));
@@ -220,7 +240,7 @@ bool tcp_package::decapsulate_package(tcp_pseudoheader *pshdr_addr, uint8_t *raw
 }
 
 // TODO: write encapsulate packet
-uint8_t* tcp_package::encapsulate_package(uint16_t &package_length) {
+uint8_t* tcp_packet::encapsulate_package(uint16_t &package_length) {
     // set package_length
     package_length = this->tcp_hdr.get_data_offset() * 4 + this->payload_length;
 
@@ -238,4 +258,90 @@ uint8_t* tcp_package::encapsulate_package(uint16_t &package_length) {
     memcpy(send_buffer + this->tcp_hdr.get_data_offset() * 4, this->payload, this->payload_length);
 
     return send_buffer;
+}
+
+// establish_connetion from server/receiver's perspective
+// -> receive SYN(syn#A)
+// -> send ACK-SYN (ack#B, syn#A + 1) 
+// -> receive ACK (ack#B + 1)
+// -> print connection established server for debugging
+bool tcp_packet::establish_connection_receiver(int socketfd, tcp_pseudoheader *pshdr_addr, uint16_t dest_port, uint16_t src_port) {
+    uint8_t *temp_buffer = static_cast<uint8_t *>(calloc(PAYLOAD_LENGTH + sizeof(tcp_packet), sizeof(uint8_t)));
+
+    // wait to receive from sender first
+    struct sockaddr_in sender_addr;
+    socklen_t sender_length = sizeof(sender_addr);
+
+    // hopefully receiving syn
+    int rc = recvfrom(socketfd, temp_buffer, PAYLOAD_LENGTH + sizeof(tcp_header), 0, (struct sockaddr*)&sender_addr, &sender_length);
+    // sanity check
+    if (rc <= 0) {
+        printf("could not receive first SYN :/\n");
+        free(temp_buffer);
+        return false;
+    }
+
+    bool decap_check;
+    decap_check = decapsulate_package(pshdr_addr, temp_buffer, rc);
+    // sanity check for decapsulation
+    if (!decap_check) {
+        printf("could not decapsulate syn packet :/\n");
+        free(temp_buffer);
+        return false;
+    }
+    // sanity check for syn
+    if (!(this->tcp_hdr.get_flag() & TCP_SYN)) {
+        printf("could not receive syn :/\n");
+        free(temp_buffer);
+        return false;
+    }
+
+    // generate new sequence number for syn-ack packet
+    uint32_t seq_number = generate_random_sequence_number();
+    // make new header for packet
+    tcp_header syn_ack_header = tcp_header(dest_port, src_port);
+    syn_ack_header.set_flag(TCP_SYN | TCP_ACK);
+    syn_ack_header.set_ack_number(this->tcp_hdr.get_sequence() + 1);
+    syn_ack_header.set_sequence(seq_number);
+
+    // make new packet with no payload
+    tcp_packet syn_ack_packet = tcp_packet(*pshdr_addr, syn_ack_header, nullptr, 0);
+
+    // encapsulate package to be sent
+    uint16_t package_length = 0;
+    uint8_t *send_buffer = syn_ack_packet.encapsulate_package(package_length);
+
+    // send syn-ack packet
+    sendto(socketfd, send_buffer, package_length, 0, (struct sockaddr*)&sender_addr, sender_length);
+    free(send_buffer);
+
+    // receive last packet
+    memset(temp_buffer, 0, PAYLOAD_LENGTH + sizeof(tcp_header));
+
+    rc = recvfrom(socketfd, temp_buffer, PAYLOAD_LENGTH + sizeof(tcp_header), 0, (struct sockaddr*)&sender_addr, &sender_length);
+    // sanity check
+    if (rc <= 0) {
+        printf("could not receive ACK :/\n");
+        free(temp_buffer);
+        return false;
+    }
+
+    decap_check = decapsulate_package(pshdr_addr, temp_buffer, rc);
+    // sanity check for decapsulation
+    if (!decap_check) {
+        printf("could not decapsulate syn packet :/\n");
+        free(temp_buffer);
+        return false;
+    }
+    // sanity check for ack
+    if (!(this->tcp_hdr.get_flag() & TCP_ACK)) {
+        printf("could not receive syn :/\n");
+        free(temp_buffer);
+        return false;
+    }
+
+    printf("receiver connection was established^^\n");
+    free(temp_buffer);
+
+    return true;
 }
