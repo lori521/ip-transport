@@ -8,6 +8,8 @@
 #include <arpa/inet.h>
 #include <cstdlib>
 #include  "../ip/header/header.hpp"
+#include <sys/wait.h>
+#include <unistd.h>
 
 using namespace std;
 

@@ -130,7 +130,9 @@ tcp_packet::tcp_packet(tcp_pseudoheader pshdr, tcp_header hdr, uint8_t* new_payl
         copy_payload_length = payload_length;
     else
         copy_payload_length = PAYLOAD_LENGTH;
-    memcpy(this->payload, new_payload, copy_payload_length);
+
+    if (new_payload != nullptr && copy_payload_length > 0)
+        memcpy(this->payload, new_payload, copy_payload_length);
 
     // calculate checksum for whole package
     this->tcp_hdr.set_checksum(0);
@@ -274,7 +276,10 @@ bool tcp_packet::establish_connection_receiver(int socketfd, tcp_pseudoheader *p
     socklen_t sender_length = sizeof(sender_addr);
 
     // hopefully receiving syn
+    // printf("[SERVER] waiting for SYN...\n"); fflush(stdout);
     int rc = recvfrom(socketfd, temp_buffer, PAYLOAD_LENGTH + sizeof(tcp_header), 0, (struct sockaddr*)&sender_addr, &sender_length);
+    // printf("[SERVER] received %d bytes\n", rc); fflush(stdout);
+
     // sanity check
     if (rc <= 0) {
         printf("could not receive first SYN :/\n");
@@ -284,6 +289,8 @@ bool tcp_packet::establish_connection_receiver(int socketfd, tcp_pseudoheader *p
 
     bool decap_check;
     decap_check = decapsulate_package(pshdr_addr, temp_buffer, rc);
+    // printf("[SERVER] SYN decapsulated, flag = %d\n", this->tcp_hdr.get_flag()); fflush(stdout);
+
     // sanity check for decapsulation
     if (!decap_check) {
         printf("could not decapsulate syn packet :/\n");
@@ -300,7 +307,7 @@ bool tcp_packet::establish_connection_receiver(int socketfd, tcp_pseudoheader *p
     // generate new sequence number for syn-ack packet
     uint32_t seq_number = generate_random_sequence_number();
     // make new header for packet
-    tcp_header syn_ack_header = tcp_header(dest_port, src_port);
+    tcp_header syn_ack_header = tcp_header(src_port, dest_port);
     syn_ack_header.set_flag(TCP_SYN | TCP_ACK);
     syn_ack_header.set_ack_number(this->tcp_hdr.get_sequence() + 1);
     syn_ack_header.set_sequence(seq_number);
@@ -313,13 +320,17 @@ bool tcp_packet::establish_connection_receiver(int socketfd, tcp_pseudoheader *p
     uint8_t *send_buffer = syn_ack_packet.encapsulate_package(package_length);
 
     // send syn-ack packet
+    // printf("[SERVER] sending SYN-ACK...\n"); fflush(stdout);
     sendto(socketfd, send_buffer, package_length, 0, (struct sockaddr*)&sender_addr, sender_length);
+    // printf("[SERVER] SYN-ACK sent\n"); fflush(stdout);
     free(send_buffer);
 
     // receive last packet
     memset(temp_buffer, 0, PAYLOAD_LENGTH + sizeof(tcp_header));
 
+    // printf("[SERVER] waiting for ACK...\n"); fflush(stdout);
     rc = recvfrom(socketfd, temp_buffer, PAYLOAD_LENGTH + sizeof(tcp_header), 0, (struct sockaddr*)&sender_addr, &sender_length);
+    // printf("[SERVER] received ACK %d bytes\n", rc); fflush(stdout);
     // sanity check
     if (rc <= 0) {
         printf("could not receive ACK :/\n");
@@ -341,7 +352,7 @@ bool tcp_packet::establish_connection_receiver(int socketfd, tcp_pseudoheader *p
         return false;
     }
 
-    printf("receiver connection was established^^\n");
+    printf("receiver connection was established ^^\n");
     free(temp_buffer);
 
     return true;
@@ -357,7 +368,7 @@ bool tcp_packet::establish_connection_sender(int socketfd, tcp_pseudoheader *psh
     // generate new sequence number for syn packet
     uint32_t seq_number = generate_random_sequence_number();
     // make new header for packet
-    tcp_header first_syn_header = tcp_header(dest_port, src_port);
+    tcp_header first_syn_header = tcp_header(src_port, dest_port);
     first_syn_header.set_flag(TCP_SYN);
     first_syn_header.set_sequence(seq_number);
 
@@ -369,7 +380,9 @@ bool tcp_packet::establish_connection_sender(int socketfd, tcp_pseudoheader *psh
     uint8_t *send_buffer = syn_packet.encapsulate_package(package_length);
 
     // send first syn packet
+    // printf("[CLIENT] sending SYN...\n"); fflush(stdout);
     sendto(socketfd, send_buffer, package_length, 0, (struct sockaddr*)receiver_addr, sizeof(* receiver_addr));
+    // printf("[CLIENT] SYN sent, waiting for SYN-ACK...\n"); fflush(stdout);
     free(send_buffer);
 
     // new buffer to receive syn-ack packet
@@ -378,6 +391,7 @@ bool tcp_packet::establish_connection_sender(int socketfd, tcp_pseudoheader *psh
     // hopefully receiving syn-ack
     socklen_t receiver_length = sizeof(*receiver_addr);
     int rc = recvfrom(socketfd, temp_buffer, PAYLOAD_LENGTH + sizeof(tcp_header), 0, (struct sockaddr*)receiver_addr, &receiver_length);
+    // printf("[CLIENT] received %d bytes\n", rc); fflush(stdout);
     // sanity check
     if (rc <= 0) {
         printf("could not receive first SYN-ACK :/\n");
@@ -407,7 +421,7 @@ bool tcp_packet::establish_connection_sender(int socketfd, tcp_pseudoheader *psh
     // generate new sequence number for ack packet
     seq_number = generate_random_sequence_number();
     // make new header for packet
-    tcp_header ack_header = tcp_header(dest_port, src_port);
+    tcp_header ack_header = tcp_header(src_port, dest_port);
     ack_header.set_flag(TCP_ACK);
     ack_header.set_sequence(seq_number);
     ack_header.set_ack_number(check_sequence + 1);
@@ -423,7 +437,7 @@ bool tcp_packet::establish_connection_sender(int socketfd, tcp_pseudoheader *psh
     sendto(socketfd, send_buffer, package_length, 0, (struct sockaddr*)receiver_addr, sizeof(* receiver_addr));
     free(send_buffer);
 
-    printf("sender connection was established^^\n");
+    printf("sender connection was established ^^\n");
     free(temp_buffer);
 
     return true;
