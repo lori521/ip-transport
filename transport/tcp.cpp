@@ -1,5 +1,4 @@
-#include "tcp.hpp"
-
+#pragma once
 #include "tcp_header.hpp"
 
 // TODO: implement tcp_window_size dynamic algorithm -> later
@@ -65,6 +64,30 @@ uint16_t tcp_header::get_checksum() {
 
 void tcp_header::set_checksum(int value) {
     this->checksum = value;
+}
+
+// TODO: write helper function to read bytes sent
+bool tcp_header::read_raw_header(uint8_t* raw_data) {
+    // sanity chheck
+    if (raw_data == nullptr) {
+        printf("could not get raw_data\n");
+        return false;
+    }
+
+    // copy data
+    // IMPORTANT -> it is in network order
+    memcpy(this, raw_data, sizeof(tcp_header));
+
+    // convert network order to host order
+    this->source_port = ntohs(this->source_port);
+    this->destination_port = ntohs(this->destination_port);
+    this->sequence_number = ntohl(this->sequence_number);
+    this->ack_number = ntohl(this->ack_number);
+    this->window = ntohs(this->window);
+    this->checksum = ntohs(this->checksum);
+    this->urgent_pointer = ntohs(this->urgent_pointer);
+
+    return true;
 }
 
 /* ---------------------------------- TCP_PACKAGE ------------------------------------- */
@@ -140,6 +163,17 @@ uint16_t tcp_package::caluculate_checksum(tcp_pseudoheader *pshdr_addr, tcp_head
 
     return ~sum;
 }
+
+void tcp_package::free_package() {
+    if (this->payload != nullptr)
+        free(this->payload);
+}
+
+// TODO: write decapsulate packet
+// bool tcp_package::decapsulate_package(tcp_package *package_addr) {
+// }
+
+// TODO: write encapsulate packet
 
 int main() {
     return 0;
