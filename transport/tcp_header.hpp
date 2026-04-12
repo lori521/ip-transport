@@ -7,6 +7,7 @@
 #include <iostream>
 #include <arpa/inet.h>
 #include <cstdlib>
+#include  "../ip/ip.hpp"
 
 using namespace std;
 
@@ -63,6 +64,7 @@ public:
     uint16_t get_checksum();
     void set_checksum(int value);
     uint16_t caluculate_checksum(tcp_pseudoheader* pshdr, tcp_header* hdr, uint8_t* payload, uint16_t payload_length);
+    bool read_raw_header(uint8_t* raw_data);
 } __attribute__((packed));
 
 // TCP Package -> TCP Header + payload
@@ -73,10 +75,9 @@ struct tcp_package {
 
     tcp_package();
     tcp_package(tcp_header* hdr, uint8_t* payload, uint16_t payload_length);
-
+    //bool decapsulate_package(tcp_package *package_addr);
+    void free_package();
 } __attribute__((packed));
 
 uint32_t generate_random_sequence_number();
-
-
 #endif // TCP_HPP
