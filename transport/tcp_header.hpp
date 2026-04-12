@@ -83,6 +83,7 @@ struct tcp_packet {
     uint8_t* encapsulate_package(uint16_t &package_length);
     void free_package();
     bool establish_connection_receiver(int socketfd, tcp_pseudoheader *pshdr_addr, uint16_t dest_port, uint16_t src_port);
+    bool establish_connection_sender(int socketfd, tcp_pseudoheader *pshdr_addr, uint16_t dest_port, uint16_t src_port, struct sockaddr_in *receiver_addr);
 } __attribute__((packed));
 
 uint32_t generate_random_sequence_number();
