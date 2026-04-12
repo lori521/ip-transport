@@ -170,8 +170,53 @@ void tcp_package::free_package() {
 }
 
 // TODO: write decapsulate packet
-// bool tcp_package::decapsulate_package(tcp_package *package_addr) {
-// }
+// receive from network -> [ tcp_header | payload ] (20/max PAYLOAD_LENGTH bytes)
+bool tcp_package::decapsulate_package(tcp_pseudoheader *pshdr_addr, uint8_t *raw_buffer, uint16_t raw_buffer_length) {
+    // variable to check if header could be read
+    bool check;
+    check = this->tcp_hdr.read_raw_header(raw_buffer);
+
+    if (!check) {
+        printf("could not read raw_buffer...try again buddy\n");
+        return false;
+    }
+
+    // checksum verification for received packet
+    // get received checksum
+    uint16_t old_checksum = this->tcp_hdr.get_checksum();
+    // recalculate checksum for verification
+    this->tcp_hdr.set_checksum(0);
+    uint8_t *payload_addr = raw_buffer + sizeof(tcp_hdr);
+    uint16_t payload_length = raw_buffer_length - sizeof(tcp_hdr);
+    
+    uint16_t new_checksum = this->tcp_hdr.caluculate_checksum(pshdr_addr, &this->tcp_hdr, payload_addr, payload_length);
+
+    // check if old_checksum is the same as new_checksum
+    if (new_checksum != old_checksum) {
+        printf("checksum is not the same ... another try might suffice:))\n");
+        return false;
+    } else {
+        this->tcp_hdr.set_checksum(new_checksum);
+    }
+    
+    // copy data inside raw_buffer into payload
+    // update payload_length
+    uint8_t  offset = this->tcp_hdr.get_data_offset() * 4;
+    uint8_t  *payload_addr_with_offset  = raw_buffer + offset;
+    uint16_t payload_length_with_offset = raw_buffer_length - offset;
+    this->payload = static_cast<uint8_t *>(calloc(payload_length_with_offset, sizeof(uint8_t)));
+    if (this->payload == nullptr) {
+        printf("could not allocate space for received payload :/\n");
+        return false;
+    }
+    memcpy(this->payload, payload_addr_with_offset, payload_length_with_offset);
+
+    // set payload length
+    this->payload_length = payload_length_with_offset;
+
+    // all good :))
+    return true;
+}
 
 // TODO: write encapsulate packet
 

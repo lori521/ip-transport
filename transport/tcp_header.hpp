@@ -75,7 +75,7 @@ struct tcp_package {
 
     tcp_package();
     tcp_package(tcp_pseudoheader pshdr, tcp_header hdr, uint8_t* new_payload, int payload_length);
-    //bool decapsulate_package(tcp_package *package_addr);
+    bool decapsulate_package(tcp_pseudoheader *pshdr_addr, uint8_t *raw_buffer, uint16_t raw_buffer_length);
     void free_package();
 } __attribute__((packed));
 
