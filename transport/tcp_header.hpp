@@ -65,6 +65,7 @@ public:
     void set_sequence(uint32_t new_seq_number);
     void set_ack_number(uint32_t new_ack_number);
     uint32_t get_sequence();
+    uint32_t get_ack_number();
     uint8_t get_flag();
     uint8_t get_data_offset();
     uint16_t get_checksum();

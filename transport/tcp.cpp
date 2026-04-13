@@ -66,6 +66,10 @@ uint32_t tcp_header::get_sequence() {
     return this->sequence_number;
 }
 
+uint32_t tcp_header::get_ack_number() {
+    return this->ack_number;
+}
+
 // TODO: implement function to get flags
 uint8_t tcp_header::get_flag() {
     return this->flags;
@@ -111,7 +115,10 @@ bool tcp_header::read_raw_header(uint8_t* raw_data) {
 
 /* ---------------------------------- TCP_PACKAGE ------------------------------------- */
 // TODO: implement constructor for tcp package without parameters
-tcp_packet::tcp_packet() {}
+tcp_packet::tcp_packet() {
+    this->payload = nullptr;
+    this->payload_length = 0;
+}
 
 // TODO: implement constructor for tcp package with parameters
 tcp_packet::tcp_packet(tcp_pseudoheader pshdr, tcp_header hdr, uint8_t* new_payload, int payload_length) {
@@ -138,7 +145,7 @@ tcp_packet::tcp_packet(tcp_pseudoheader pshdr, tcp_header hdr, uint8_t* new_payl
     this->tcp_hdr.set_checksum(0);
 
     uint16_t new_checksum = this->tcp_hdr.caluculate_checksum(&pshdr, &this->tcp_hdr, this->payload, copy_payload_length);
-    this->tcp_hdr.set_checksum(htons(new_checksum));
+    this->tcp_hdr.set_checksum(new_checksum);
 }
 
 // TODO: write check_sum algorithm -> modify with FEC for better transmission
@@ -186,8 +193,10 @@ uint16_t tcp_header::caluculate_checksum(tcp_pseudoheader *pshdr_addr, tcp_heade
 }
 
 void tcp_packet::free_package() {
-    if (this->payload != nullptr)
+    if (this->payload != nullptr) {
         free(this->payload);
+        this->payload = nullptr;
+    }
 }
 
 // TODO: write decapsulate packet
@@ -195,7 +204,7 @@ void tcp_packet::free_package() {
 bool tcp_packet::decapsulate_package(tcp_pseudoheader *pshdr_addr, uint8_t *raw_buffer, uint16_t raw_buffer_length) {
     // checksum verification for received packet
     // get received checksum
-    uint16_t old_checksum = ntohs(*(uint16_t*)(raw_buffer + 16));
+    uint16_t old_checksum = *(uint16_t*)(raw_buffer + 16);
     // recalculate checksum for verification
     raw_buffer[16] = 0;
     raw_buffer[17] = 0;
@@ -227,12 +236,21 @@ bool tcp_packet::decapsulate_package(tcp_pseudoheader *pshdr_addr, uint8_t *raw_
     uint8_t  offset = this->tcp_hdr.get_data_offset() * 4;
     uint8_t  *payload_addr_with_offset  = raw_buffer + offset;
     uint16_t payload_length_with_offset = raw_buffer_length - offset;
-    this->payload = static_cast<uint8_t *>(calloc(payload_length_with_offset, sizeof(uint8_t)));
-    if (this->payload == nullptr) {
-        printf("could not allocate space for received payload :/\n");
-        return false;
+
+    // manual garbage collector :))
+    if (this->payload != nullptr) {
+        free(this->payload);
+        this->payload = nullptr;
     }
-    memcpy(this->payload, payload_addr_with_offset, payload_length_with_offset);
+    
+    if (payload_length_with_offset > 0) {
+        this->payload = static_cast<uint8_t *>(calloc(payload_length_with_offset, sizeof(uint8_t)));
+        if (this->payload == nullptr) {
+            printf("could not allocate space for received payload :/\n");
+            return false;
+        }
+        memcpy(this->payload, payload_addr_with_offset, payload_length_with_offset);
+    }
 
     // set payload length
     this->payload_length = payload_length_with_offset;
@@ -257,7 +275,8 @@ uint8_t* tcp_packet::encapsulate_package(uint16_t &package_length) {
     memcpy(send_buffer, &this->tcp_hdr, sizeof(tcp_hdr));
 
     // copy payload
-    memcpy(send_buffer + this->tcp_hdr.get_data_offset() * 4, this->payload, this->payload_length);
+    if (this->payload != nullptr && this->payload_length > 0)
+        memcpy(send_buffer + this->tcp_hdr.get_data_offset() * 4, this->payload, this->payload_length);
 
     return send_buffer;
 }
@@ -352,6 +371,13 @@ bool tcp_packet::establish_connection_receiver(int socketfd, tcp_pseudoheader *p
         return false;
     }
 
+    // check sequence
+    if (this->tcp_hdr.get_ack_number() != seq_number + 1) {
+        printf("ACK number is incorrect :/ (receiver)\n");
+        free(temp_buffer);
+        return false;
+    }
+
     printf("receiver connection was established ^^\n");
     free(temp_buffer);
 
@@ -411,6 +437,13 @@ bool tcp_packet::establish_connection_sender(int socketfd, tcp_pseudoheader *psh
     // sanity check for syn-ack
     if ((this->tcp_hdr.get_flag() & (TCP_SYN | TCP_ACK)) != (TCP_SYN | TCP_ACK)) {
         printf("could not receive syn-ack :/\n");
+        free(temp_buffer);
+        return false;
+    }
+
+    // check sequence
+    if (this->tcp_hdr.get_ack_number() != seq_number + 1) {
+        printf("SYN-ACK number is incorrect :/ (sender)\n");
         free(temp_buffer);
         return false;
     }
@@ -547,7 +580,14 @@ bool tcp_packet::finish_connection_receiver(int socketfd, tcp_pseudoheader *pshd
 
     // check to see if flag is set to ack
     if (!(this->tcp_hdr.get_flag() & TCP_ACK)) {
-        printf("fin was not received :/\n");
+        printf("ack n + 1 was not received :/\n");
+        free(temp_buffer);
+        return false;
+    }
+
+    // sequence number check
+    if (this->tcp_hdr.get_ack_number() != new_seq_number + 1) {
+        printf("ACK number is incorrect :/ (receiver)\n");
         free(temp_buffer);
         return false;
     }
@@ -612,6 +652,12 @@ bool tcp_packet::finish_connection_sender(int socketfd, tcp_pseudoheader *pshdr_
     // check to see if flag is fin
     if (!(this->tcp_hdr.get_flag() & TCP_ACK)) {
         printf("ack m + 1 was not received :/\n");
+        free(temp_buffer);
+        return false;
+    }
+
+    if (this->tcp_hdr.get_ack_number() != new_seq_number + 1) {
+        printf("ack m + 1 could not match\n");
         free(temp_buffer);
         return false;
     }
