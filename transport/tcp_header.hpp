@@ -84,8 +84,12 @@ struct tcp_packet {
     bool decapsulate_package(tcp_pseudoheader *pshdr_addr, uint8_t *raw_buffer, uint16_t raw_buffer_length);
     uint8_t* encapsulate_package(uint16_t &package_length);
     void free_package();
+    // 3 waay handshake to establish connection
     bool establish_connection_receiver(int socketfd, tcp_pseudoheader *pshdr_addr, uint16_t dest_port, uint16_t src_port);
     bool establish_connection_sender(int socketfd, tcp_pseudoheader *pshdr_addr, uint16_t dest_port, uint16_t src_port, struct sockaddr_in *receiver_addr);
+    // 4 way handshake to finish onnection
+    bool finish_connection_receiver(int socketfd, tcp_pseudoheader *pshdr_addr, uint16_t dest_port, uint16_t src_port);
+    bool finish_connection_sender(int socketfd, tcp_pseudoheader *pshdr_addr, uint16_t dest_port, uint16_t src_port, struct sockaddr_in *receiver_addr);
 } __attribute__((packed));
 
 uint32_t generate_random_sequence_number();

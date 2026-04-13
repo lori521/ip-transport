@@ -442,3 +442,119 @@ bool tcp_packet::establish_connection_sender(int socketfd, tcp_pseudoheader *psh
 
     return true;
 }
+
+/* ---------- 4 way handshake to finish connection --------------- */
+// finish_connection from server/receiver's perspective -- passive close
+// -> receive FIN(fin #m)
+// -> send ACK (ack #m + 1)
+// -> send FIN (fin #n)
+// -> receive ACK (ack #n + 1)
+// -> print finished connection receiver for debugging
+bool tcp_packet::finish_connection_receiver(int socketfd, tcp_pseudoheader *pshdr_addr, uint16_t dest_port, uint16_t src_port) {
+    // new buffer to receive fin packet
+    uint8_t *temp_buffer = static_cast<uint8_t *>(calloc(PAYLOAD_LENGTH + sizeof(tcp_header), sizeof(uint8_t)));
+
+    // wait to receive from sender first
+    struct sockaddr_in sender_addr;
+    socklen_t sender_length = sizeof(sender_addr);
+
+    // hopefully receiving fin
+    // printf("[SERVER] waiting for FIN...\n"); fflush(stdout);
+    int rc = recvfrom(socketfd, temp_buffer, PAYLOAD_LENGTH + sizeof(tcp_header), 0, (struct sockaddr*)&sender_addr, &sender_length);
+    // printf("[SERVER] received %d bytes\n", rc); fflush(stdout);
+
+    // sanity check
+    if (rc <= 0) {
+        printf("could not get fin packet :/\n");
+        free(temp_buffer);
+        return false;
+    }
+
+    bool decap_check;
+    decap_check = decapsulate_package(pshdr_addr, temp_buffer, rc);
+    // sanity check for decapsulation
+    if (!decap_check) {
+        printf("could not decapsulate fin packet :/\n");
+        free(temp_buffer);
+        return false;
+    }
+
+    // check to see if flag is fin
+    if (!(this->tcp_hdr.get_flag() & TCP_FIN)) {
+        printf("fin was not received :/\n");
+        free(temp_buffer);
+        return false;
+    }
+
+    // send ack packet with and ack_number m + 1
+    // save sequence number to check next packet 
+    uint32_t check_sequence = this->tcp_hdr.get_sequence();
+
+    // make new header
+    tcp_header ack_header = tcp_header(src_port, dest_port);
+    ack_header.set_flag(TCP_ACK);
+    ack_header.set_ack_number(check_sequence + 1);
+
+    // prepare packet
+    tcp_packet ack_packet = tcp_packet(*pshdr_addr, ack_header, nullptr, 0);
+
+    // prepare packet to be sent 
+    uint16_t package_length = 0;
+    uint8_t *send_buffer = ack_packet.encapsulate_package(package_length);
+
+    // send ack package to sender
+    sendto(socketfd, send_buffer, package_length, 0, (struct sockaddr*)&sender_addr, sender_length);
+    free(send_buffer);
+
+    // send fin packet with and new seq 
+    // save sequence number to check next packet 
+    uint32_t new_seq_number = generate_random_sequence_number();
+    // make new header
+    tcp_header fin_header = tcp_header(src_port, dest_port);
+    fin_header.set_flag(TCP_FIN);
+    fin_header.set_sequence(new_seq_number);
+
+    // prepare packet
+    tcp_packet fin_packet = tcp_packet(*pshdr_addr, fin_header, nullptr, 0);
+
+    // prepare packet to be sent 
+    package_length = 0;
+    send_buffer = fin_packet.encapsulate_package(package_length);
+
+    // send fin package to sender
+    sendto(socketfd, send_buffer, package_length, 0, (struct sockaddr*)&sender_addr, sender_length);
+    free(send_buffer);
+
+    // hopefully getting ack n + 1 to finish connection
+    memset(temp_buffer, 0, PAYLOAD_LENGTH + sizeof(tcp_header));
+    rc = recvfrom(socketfd, temp_buffer, PAYLOAD_LENGTH + sizeof(tcp_header), 0 , (struct sockaddr*)&sender_addr, &sender_length);
+
+    // sanity check again
+    if (rc <= 0) {
+        printf("could not get ack packet :/\n");
+        free(temp_buffer);
+        return false;
+    }
+
+    // decapsulate package
+    decap_check = decapsulate_package(pshdr_addr, temp_buffer, rc);
+    // sanity check for decapsulation
+    if (!decap_check) {
+        printf("could not decapsulate ack packet :/\n");
+        free(temp_buffer);
+        return false;
+    }
+
+    // check to see if flag is set to ack
+    if (!(this->tcp_hdr.get_flag() & TCP_ACK)) {
+        printf("fin was not received :/\n");
+        free(temp_buffer);
+        return false;
+    }
+
+    printf("receiver connection was finished ^^\n");
+    free(temp_buffer);
+
+    return true;
+}
+
