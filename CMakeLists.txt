@@ -77,14 +77,15 @@ pico_sdk_init()
 
 # Add executable. Default name is the project name, version 0.1
 
-add_subdirectory(manchester_codec)
+# add_subdirectory(manchester_codec)
+
+add_subdirectory(manchester_nonblock)
 
 add_subdirectory(ethernet)
 
 add_subdirectory(ip)
 
-add_executable(pico_prj pico_prj.cpp
-        ip/ip.cpp)
+add_executable(pico_prj pico_prj.cpp)
 
 pico_set_program_name(pico_prj "pico_prj")
 pico_set_program_version(pico_prj "0.1")
@@ -96,17 +97,18 @@ pico_enable_stdio_usb(pico_prj 1)
 # Add the standard library to the build
 target_link_libraries(pico_prj
         pico_stdlib
-        pico_multicore
 )
 
+# target_link_libraries(pico_prj
+#         manchester_codec)
 target_link_libraries(pico_prj
-        manchester_codec)
-
+        manchester_nonblock)
 target_link_libraries(pico_prj
         ethernet)
 target_link_libraries(pico_prj
         ip
 )
+
 # Add the standard include files to the build
 target_include_directories(pico_prj PRIVATE
   ${CMAKE_CURRENT_LIST_DIR}

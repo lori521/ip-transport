@@ -43,7 +43,6 @@ struct ipv4_packet_batch_t {
 
 class IPv4 {
 private:
-  Manchester &manchester;
   Ethernet &ethernet;
   ipv4_settings_t settings;
   std::unordered_map<uint16_t, ipv4_packet_batch_t> packets;
@@ -62,10 +61,11 @@ private:
                        const ipv4_options_t &options);
 
 public:
-  IPv4(Manchester &manchester, Ethernet &ethernet, ipv4_settings_t &settings)
-      : manchester(manchester), ethernet(ethernet), settings(settings) {}
+  IPv4(Ethernet &ethernet, const ipv4_settings_t &settings)
+      : ethernet(ethernet), settings(settings) {}
 
-  bool SendIPPacket(vector<uint8_t> &payload, char *destination);
+  bool SendIPPacket(vector<uint8_t> &payload, char *destination,
+                    uint8_t *destination_mac); // no arp for now
   bool ReadIPPacket(vector<uint8_t> &received_payload, char *source);
 
   // Support this for future use
