@@ -177,12 +177,6 @@ tcp_packet::tcp_packet(tcp_pseudoheader pshdr, tcp_header hdr, uint8_t* new_payl
 
     if (new_payload != nullptr && copy_payload_length > 0)
         memcpy(this->payload, new_payload, copy_payload_length);
-
-    // calculate checksum for whole package
-    this->tcp_hdr.set_checksum(0);
-
-    uint16_t new_checksum = this->tcp_hdr.caluculate_checksum(&pshdr, &this->tcp_hdr, this->payload, copy_payload_length);
-    this->tcp_hdr.set_checksum(new_checksum);
 }
 
 // TODO: write check_sum algorithm -> modify with FEC for better transmission
