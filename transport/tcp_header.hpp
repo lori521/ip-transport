@@ -8,6 +8,7 @@
 #include <arpa/inet.h>
 #include <cstdlib>
 #include  "../ip/header/header.hpp"
+#include "../ip/ip.hpp"
 #include <sys/wait.h>
 #include <unistd.h>
 #include <random>
@@ -31,6 +32,21 @@ using namespace std;
 // OPTIONS_LENGTH -> size(Options) == (DOffset-5)*32
 // PAYLOAD_LENGTH -> variable
 
+// enums for state machine
+enum state {
+    CLOSED,
+    LISTEN,
+    SYN_RECEIVED,
+    SYN_SENT,
+    ESTABLISHED,
+    FIN_WAIT_1,
+    FIN_WAIT_2,
+    CLOSING,
+    TIME_WAIT,
+    CLOSE_WAIT,
+    LAST_ACK
+};
+
 // IPv4 pseudo-header -> 96 bits(12 bytes)
 // protection against misrouted segments
 struct tcp_pseudoheader {
@@ -45,6 +61,8 @@ struct tcp_pseudoheader {
 } __attribute__((packed));
 
 class tcp_header {
+private:
+    /* data */
     uint16_t source_port;
     uint16_t destination_port;
     uint32_t sequence_number;
@@ -92,18 +110,38 @@ struct tcp_packet {
     uint8_t* payload;
     uint16_t payload_length;
 
+    // constructors
     tcp_packet();
     tcp_packet(tcp_pseudoheader pshdr, tcp_header hdr, uint8_t* new_payload, int payload_length);
-    bool decapsulate_package(tcp_pseudoheader *pshdr_addr, uint8_t *raw_buffer, uint16_t raw_buffer_length);
-    uint8_t* encapsulate_package(uint16_t &package_length);
     void free_package();
+
+    // sending/receivind raw data 
+    bool decapsulate_package(tcp_pseudoheader *pshdr_addr, uint8_t *raw_buffer, uint16_t raw_buffer_length);
+    uint8_t* encapsulate_package(tcp_pseudoheader *pshdr_addr, uint16_t &package_length);
+    
     // 3 waay handshake to establish connection
     bool establish_connection_receiver(int socketfd, tcp_pseudoheader *pshdr_addr, uint16_t dest_port, uint16_t src_port);
     bool establish_connection_sender(int socketfd, tcp_pseudoheader *pshdr_addr, uint16_t dest_port, uint16_t src_port, struct sockaddr_in *receiver_addr);
+    
     // 4 way handshake to finish onnection
     bool finish_connection_receiver(int socketfd, tcp_pseudoheader *pshdr_addr, uint16_t dest_port, uint16_t src_port);
     bool finish_connection_sender(int socketfd, tcp_pseudoheader *pshdr_addr, uint16_t dest_port, uint16_t src_port, struct sockaddr_in *receiver_addr);
 } __attribute__((packed));
+
+class tcp_layer {
+private:
+    /* data */
+    IPv4 &ipv4_layer;
+    state current_state;
+public:
+    tcp_layer(IPv4 &new_ipv4_layer);
+    ~tcp_layer();
+
+    // GETTER
+    state get_state();
+    // SETTER
+    void set_state(state new_state);
+};
 
 uint32_t generate_random_sequence_number();
 #endif // TCP_HPP

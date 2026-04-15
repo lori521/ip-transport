@@ -5,12 +5,12 @@
 
 /* --------------------- TCP_PSEUDOHEADER ---------------------------- */
 
-// TODO: implement constructor for tcp pseudo-header without parameters
+// constructor for tcp pseudo-header without parameters
 tcp_pseudoheader::tcp_pseudoheader() {
     memset(this, 0, sizeof(tcp_pseudoheader));
 }
 
-// // TODO: implement constructor for tcp pseudo-header with parameters
+// constructor for tcp pseudo-header with parameters
 tcp_pseudoheader::tcp_pseudoheader(uint32_t source_ip, uint32_t destination_ip, uint16_t tcp_length) {
     this->source_address = source_ip;
     this->destination_address = destination_ip;
@@ -21,7 +21,7 @@ tcp_pseudoheader::tcp_pseudoheader(uint32_t source_ip, uint32_t destination_ip, 
 }
 
 /* ----------------------------- TCP_HEADER -------------------------------- */
-// TODO: implement constructor for tcp header without parameters
+// constructor for tcp header without parameters
 tcp_header::tcp_header() {
     memset(this, 0, sizeof(tcp_header));
 }
@@ -35,7 +35,7 @@ uint32_t generate_random_sequence_number() {
     return initial_sequence_number;
 }
 
-// TODO: implement constructor for tcp header with parameters
+// constructor for tcp header with parameters
 tcp_header::tcp_header(uint16_t source_port, uint16_t destination_port) {
     this->source_port = source_port;
     this->destination_port = destination_port;
@@ -51,43 +51,43 @@ tcp_header::tcp_header(uint16_t source_port, uint16_t destination_port) {
 }
 
 // SETTERS
-// TODO: implement function to set flag into the header
+// function to set flag into the header
 void tcp_header::set_flag(uint8_t new_flag) {
     this->flags |= new_flag;
 }
 
-// TODO: implement function to set new ack number
+// function to set new ack number
 void tcp_header::set_ack_number(uint32_t new_ack_number) {
     this->ack_number = new_ack_number;
 }
 
-// TODO: implement function to set new seq number
+// function to set new seq number
 void tcp_header::set_sequence(uint32_t new_seq_number) {
     this->sequence_number = new_seq_number;
 }
 
-// TODO: implement function to set checksum 
+// function to set checksum 
 void tcp_header::set_checksum(int value) {
     this->checksum = value;
 }
 
-// TODO: implement function to set source port
+// function to set source port
 void tcp_header::set_source_port(uint16_t new_source_port) {
     this->source_port = new_source_port;
 }
 
-// TODO: implement function to set destination port
+// function to set destination port
 void tcp_header::set_destination_port(uint16_t new_destination_port) {
     this->destination_port = new_destination_port;
 }
 
-// TODO: implement function to set window
+// function to set window
 void tcp_header::set_window(uint16_t new_wnd_size) {
     this->window = new_wnd_size;
 }
 
 // GETTERS 
-// TODO: implement function to get sequence number
+// function to get sequence number
 uint32_t tcp_header::get_sequence() {
     return this->sequence_number;
 }
@@ -96,37 +96,37 @@ uint32_t tcp_header::get_ack_number() {
     return this->ack_number;
 }
 
-// TODO: implement function to get flags
+// function to get flags
 uint8_t tcp_header::get_flag() {
     return this->flags;
 }
 
-// TODO: implement function to find data offset
+// function to find data offset
 uint8_t tcp_header::get_data_offset() {
     return (this->data_offset_and_reserved >> 4) & MASK_FOR_OFFSET;
 }
 
-// TODO: implement get method for checksum
+// get method for checksum
 uint16_t tcp_header::get_checksum() {
     return this->checksum;
 }
 
-// TODO: implement function to get source port
+// function to get source port
 uint16_t tcp_header::get_source_port() {
     return this->source_port;
 }
 
- // TODO: implement function to get destination port
+ // function to get destination port
 uint16_t tcp_header::get_destination_port() {
     return this->destination_port;
 }
 
-// TODO: implement function to get window
+// function to get window
 uint16_t tcp_header::get_window() {
     return this->window;
 }
 
-// TODO: write helper function to read bytes sent
+// helper function to read bytes sent
 bool tcp_header::read_raw_header(uint8_t* raw_data) {
     // sanity chheck
     if (raw_data == nullptr) {
@@ -151,13 +151,13 @@ bool tcp_header::read_raw_header(uint8_t* raw_data) {
 }
 
 /* ---------------------------------- TCP_PACKAGE ------------------------------------- */
-// TODO: implement constructor for tcp package without parameters
+// constructor for tcp package without parameters
 tcp_packet::tcp_packet() {
     this->payload = nullptr;
     this->payload_length = 0;
 }
 
-// TODO: implement constructor for tcp package with parameters
+// constructor for tcp package with parameters
 tcp_packet::tcp_packet(tcp_pseudoheader pshdr, tcp_header hdr, uint8_t* new_payload, int payload_length) {
     // add header to package
     this->tcp_hdr = hdr;
@@ -179,7 +179,7 @@ tcp_packet::tcp_packet(tcp_pseudoheader pshdr, tcp_header hdr, uint8_t* new_payl
         memcpy(this->payload, new_payload, copy_payload_length);
 }
 
-// TODO: write check_sum algorithm -> modify with FEC for better transmission
+// check_sum algorithm -> modify with FEC for better transmission
 uint16_t tcp_header::caluculate_checksum(tcp_pseudoheader *pshdr_addr, tcp_header *hdr_addr, uint8_t *payload_addr, int payload_size) {
     uint32_t sum = 0;
 
@@ -228,4 +228,21 @@ void tcp_packet::free_package() {
         free(this->payload);
         this->payload = nullptr;
     }
+}
+
+/* ---------------------------------- TCP_LAYER ------------------------------------- */
+// basic constructor with ipv4_layer constructor call
+tcp_layer::tcp_layer(IPv4 &new_ipv4_layer) : ipv4_layer(new_ipv4_layer) {
+    // beggining state
+    this->current_state = CLOSED;
+}
+
+// function to get current state 
+state tcp_layer::get_state() {
+    return this->current_state;
+}
+
+// function to set/change current state
+void tcp_layer::set_state(state new_state) {
+    this->current_state = new_state;
 }
