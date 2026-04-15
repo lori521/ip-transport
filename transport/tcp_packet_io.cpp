@@ -61,7 +61,7 @@ bool tcp_packet::decapsulate_package(tcp_pseudoheader *pshdr_addr, uint8_t *raw_
 }
 
 // TODO: write encapsulate packet
-uint8_t* tcp_packet::encapsulate_package(uint16_t &package_length) {
+uint8_t* tcp_packet::encapsulate_package(tcp_pseudoheader *pshdr_addr, uint16_t &package_length) {
     // set package_length
     package_length = this->tcp_hdr.get_data_offset() * 4 + this->payload_length;
 
@@ -72,8 +72,22 @@ uint8_t* tcp_packet::encapsulate_package(uint16_t &package_length) {
         return nullptr;
     }
 
+    // temporary copy to change to network order
+    tcp_header network_header = this->tcp_hdr;
+    network_header.set_sequence(htonl(this->tcp_hdr.get_sequence()));
+    network_header.set_ack_number(htonl(this->tcp_hdr.get_ack_number()));
+
+    network_header.set_source_port(htons(this->tcp_hdr.get_source_port()));
+    network_header.set_destination_port(htons(this->tcp_hdr.get_destination_port()));
+
+    network_header.set_window(htons(this->tcp_hdr.get_window()));
+
+    network_header.set_checksum(0);
+    uint16_t final_checksum = network_header.caluculate_checksum(pshdr_addr, &network_header, this->payload, this->payload_length);
+    network_header.set_checksum(final_checksum);
+
     // copy header in send_buffer
-    memcpy(send_buffer, &this->tcp_hdr, sizeof(tcp_hdr));
+    memcpy(send_buffer, &network_header, sizeof(tcp_hdr));
 
     // copy payload
     if (this->payload != nullptr && this->payload_length > 0)

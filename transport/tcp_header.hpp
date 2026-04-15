@@ -10,6 +10,7 @@
 #include  "../ip/header/header.hpp"
 #include <sys/wait.h>
 #include <unistd.h>
+#include <random>
 
 using namespace std;
 
@@ -61,15 +62,26 @@ public:
     tcp_header(uint16_t source_port, uint16_t destination_port);
 
     // auxiliar functions to modify header fields
+    // setters
     void set_flag(uint8_t new_flag);
     void set_sequence(uint32_t new_seq_number);
     void set_ack_number(uint32_t new_ack_number);
+    void set_source_port(uint16_t new_source_port);
+    void set_destination_port(uint16_t new_destination_port);
+    void set_checksum(int value);
+    void set_window(uint16_t new_wnd_size);
+
+    // getters
     uint32_t get_sequence();
     uint32_t get_ack_number();
     uint8_t get_flag();
     uint8_t get_data_offset();
     uint16_t get_checksum();
-    void set_checksum(int value);
+    uint16_t get_source_port();
+    uint16_t get_destination_port();
+    uint16_t get_window();
+    
+    // other auxiliar functions
     uint16_t caluculate_checksum(tcp_pseudoheader *pshdr_addr, tcp_header *hdr_addr, uint8_t *payload_addr, int payload_size);
     bool read_raw_header(uint8_t* raw_data);
 } __attribute__((packed));

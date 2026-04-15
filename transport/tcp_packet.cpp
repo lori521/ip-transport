@@ -37,19 +37,20 @@ uint32_t generate_random_sequence_number() {
 
 // TODO: implement constructor for tcp header with parameters
 tcp_header::tcp_header(uint16_t source_port, uint16_t destination_port) {
-    this->source_port = htons(source_port);
-    this->destination_port = htons(destination_port);
-    this->sequence_number = htonl(generate_random_sequence_number());
-    this->ack_number = htonl(0);
+    this->source_port = source_port;
+    this->destination_port = destination_port;
+    this->sequence_number = generate_random_sequence_number();
+    this->ack_number = 0;
     this->data_offset_and_reserved = (5 << 4);
     this->flags = 0;
-    this->window = htons(65535);
+    this->window = 65535;
     // IMPORTANT -> checksum set to 0
     this->checksum = 0;
-    this->urgent_pointer = htons(0);
+    this->urgent_pointer = 0;
     // what do i do with options?
 }
 
+// SETTERS
 // TODO: implement function to set flag into the header
 void tcp_header::set_flag(uint8_t new_flag) {
     this->flags |= new_flag;
@@ -57,14 +58,35 @@ void tcp_header::set_flag(uint8_t new_flag) {
 
 // TODO: implement function to set new ack number
 void tcp_header::set_ack_number(uint32_t new_ack_number) {
-    this->ack_number = htonl(new_ack_number);
+    this->ack_number = new_ack_number;
 }
 
 // TODO: implement function to set new seq number
 void tcp_header::set_sequence(uint32_t new_seq_number) {
-    this->sequence_number = htonl(new_seq_number);
+    this->sequence_number = new_seq_number;
 }
 
+// TODO: implement function to set checksum 
+void tcp_header::set_checksum(int value) {
+    this->checksum = value;
+}
+
+// TODO: implement function to set source port
+void tcp_header::set_source_port(uint16_t new_source_port) {
+    this->source_port = new_source_port;
+}
+
+// TODO: implement function to set destination port
+void tcp_header::set_destination_port(uint16_t new_destination_port) {
+    this->destination_port = new_destination_port;
+}
+
+// TODO: implement function to set window
+void tcp_header::set_window(uint16_t new_wnd_size) {
+    this->window = new_wnd_size;
+}
+
+// GETTERS 
 // TODO: implement function to get sequence number
 uint32_t tcp_header::get_sequence() {
     return this->sequence_number;
@@ -84,13 +106,24 @@ uint8_t tcp_header::get_data_offset() {
     return (this->data_offset_and_reserved >> 4) & MASK_FOR_OFFSET;
 }
 
-// TODO: implement get/set method for checksum
+// TODO: implement get method for checksum
 uint16_t tcp_header::get_checksum() {
     return this->checksum;
 }
 
-void tcp_header::set_checksum(int value) {
-    this->checksum = value;
+// TODO: implement function to get source port
+uint16_t tcp_header::get_source_port() {
+    return this->source_port;
+}
+
+ // TODO: implement function to get destination port
+uint16_t tcp_header::get_destination_port() {
+    return this->destination_port;
+}
+
+// TODO: implement function to get window
+uint16_t tcp_header::get_window() {
+    return this->window;
 }
 
 // TODO: write helper function to read bytes sent

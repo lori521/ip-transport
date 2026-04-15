@@ -55,7 +55,7 @@ bool tcp_packet::establish_connection_receiver(int socketfd, tcp_pseudoheader *p
 
     // encapsulate package to be sent
     uint16_t package_length = 0;
-    uint8_t *send_buffer = syn_ack_packet.encapsulate_package(package_length);
+    uint8_t *send_buffer = syn_ack_packet.encapsulate_package(pshdr_addr ,package_length);
 
     // send syn-ack packet
     // printf("[SERVER] sending SYN-ACK...\n"); fflush(stdout);
@@ -122,7 +122,7 @@ bool tcp_packet::establish_connection_sender(int socketfd, tcp_pseudoheader *psh
 
     // encapsulate package to be sent
     uint16_t package_length = 0;
-    uint8_t *send_buffer = syn_packet.encapsulate_package(package_length);
+    uint8_t *send_buffer = syn_packet.encapsulate_package(pshdr_addr, package_length);
 
     // send first syn packet
     // printf("[CLIENT] sending SYN...\n"); fflush(stdout);
@@ -183,7 +183,7 @@ bool tcp_packet::establish_connection_sender(int socketfd, tcp_pseudoheader *psh
 
     // encapsulate package to be sent
     package_length = 0;
-    send_buffer = ack_packet.encapsulate_package(package_length);
+    send_buffer = ack_packet.encapsulate_package(pshdr_addr, package_length);
 
     // send first ack packet
     sendto(socketfd, send_buffer, package_length, 0, (struct sockaddr*)receiver_addr, sizeof(* receiver_addr));
@@ -252,7 +252,7 @@ bool tcp_packet::finish_connection_receiver(int socketfd, tcp_pseudoheader *pshd
 
     // prepare packet to be sent 
     uint16_t package_length = 0;
-    uint8_t *send_buffer = ack_packet.encapsulate_package(package_length);
+    uint8_t *send_buffer = ack_packet.encapsulate_package(pshdr_addr, package_length);
 
     // send ack package to sender
     sendto(socketfd, send_buffer, package_length, 0, (struct sockaddr*)&sender_addr, sender_length);
@@ -271,7 +271,7 @@ bool tcp_packet::finish_connection_receiver(int socketfd, tcp_pseudoheader *pshd
 
     // prepare packet to be sent 
     package_length = 0;
-    send_buffer = fin_packet.encapsulate_package(package_length);
+    send_buffer = fin_packet.encapsulate_package(pshdr_addr, package_length);
 
     // send fin package to sender
     sendto(socketfd, send_buffer, package_length, 0, (struct sockaddr*)&sender_addr, sender_length);
@@ -337,7 +337,7 @@ bool tcp_packet::finish_connection_sender(int socketfd, tcp_pseudoheader *pshdr_
 
     // prepare packet to be sent 
     uint16_t package_length = 0;
-    uint8_t *send_buffer = fin_packet.encapsulate_package(package_length);
+    uint8_t *send_buffer = fin_packet.encapsulate_package(pshdr_addr, package_length);
 
     // send fin package to sender
     sendto(socketfd, send_buffer, package_length, 0, (struct sockaddr*)receiver_addr, sizeof(* receiver_addr));
@@ -421,7 +421,7 @@ bool tcp_packet::finish_connection_sender(int socketfd, tcp_pseudoheader *pshdr_
 
     // prepare packet to be sent 
     package_length = 0;
-    send_buffer = ack_packet.encapsulate_package(package_length);
+    send_buffer = ack_packet.encapsulate_package(pshdr_addr, package_length);
 
     // send ack package to sender
     sendto(socketfd, send_buffer, package_length, 0, (struct sockaddr*)receiver_addr, sizeof(* receiver_addr));
