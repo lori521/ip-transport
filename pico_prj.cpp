@@ -2,15 +2,12 @@
 #include "hardware/dma.h"
 #include "hardware/uart.h"
 #include "pico/cyw43_arch.h"
-#include "pico/multicore.h"
 #include "pico/stdlib.h"
 #include "tusb.h"
 #include <iostream>
-#include <malloc.h>
 #include <stdio.h>
 #include <string>
-#include <vector>
-using namespace std;
+
 #include "ethernet/ethernet.hpp"
 #include "ip/ip.hpp"
 #include "manchester_nonblock/manchester.hpp"
@@ -24,7 +21,6 @@ using namespace std;
 // Ethernet defines
 const uint8_t source_mac_address[] = {0xDE, 0xAD, 0xBE, 0xEF, 0xCA, 0xFE};
 const uint8_t destination_mac_address[] = {0xFE, 0xCA, 0xEF, 0xBE, 0xAD, 0xDE};
-const uint16_t ether_type = 0x0800;
 
 // Data to send
 vector<uint8_t> sending_data = {'H', 'e', 'l', 'l', 'o', ' ',
@@ -113,14 +109,18 @@ int main() {
   Ethernet e2(m2, destination_mac_address);
   IPv4 ip2(e2, ipv4_settings_t("192.168.100.2", TCP));
 
-  // Manchester m2(TX_PIN, RX_PIN, CLOCK_PERIOD_US);
+  // // Manchester m2(TX_PIN, RX_PIN, CLOCK_PERIOD_US);
   uint64_t last = to_us_since_boot(get_absolute_time());
   while (1) {
-    // struct mallinfo mi = mallinfo();
-    // printf("used heap: %d bytes\n", mi.uordblks);
+    //   // struct mallinfo mi = mallinfo();
+    //   // printf("used heap: %d bytes\n", mi.uordblks);
     uint64_t now = to_us_since_boot(get_absolute_time());
     if (now > last + 1000000) {
       printf("Running\n");
+
+      vector<uint8_t> data;
+      char ip_address[20];
+
       if (ip1.SendIPPacket(sending_data, "192.168.100.2",
                            (uint8_t *)destination_mac_address)) {
         string s;
@@ -128,6 +128,15 @@ int main() {
           s.push_back(c);
         }
         printf("Sent message from m1:\n\tMsg: %s\n", s.c_str());
+      }
+
+      if (ip2.ReadIPPacket(data, ip_address)) {
+        string s;
+        for (uint8_t c : data) {
+          s.push_back(c);
+        }
+        printf("Received message on m2 from %s:\n\tMsg: %s\n", ip_address,
+               s.c_str());
       }
       if (ip2.SendIPPacket(sending_data, "192.168.100.1",
                            (uint8_t *)source_mac_address)) {
@@ -138,23 +147,12 @@ int main() {
         printf("Sent message from m2:\n\tMsg: %s\n", s.c_str());
       }
 
-      vector<uint8_t> data;
-      char ip_address[20];
       if (ip1.ReadIPPacket(data, ip_address)) {
         string s;
         for (uint8_t c : data) {
           s.push_back(c);
         }
         printf("Received message on m1 from %s:\n\tMsg: %s\n", ip_address,
-               s.c_str());
-      }
-
-      if (ip2.ReadIPPacket(data, ip_address)) {
-        string s;
-        for (uint8_t c : data) {
-          s.push_back(c);
-        }
-        printf("Received message on m2 from %s:\n\tMsg: %s\n", ip_address,
                s.c_str());
       }
 

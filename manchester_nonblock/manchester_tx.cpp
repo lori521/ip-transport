@@ -1,140 +1,51 @@
+#include "hardware/clocks.h"
+#include "hardware/dma.h"
 #include "manchester.hpp"
-#include "pico/stdlib.h"
-#include <cstring>
+#include "manchester_encoding.pio.h"
 #include <iostream>
-
 ManchesterTx::ManchesterTx(uint8_t tx_pin, uint64_t clock_period) {
   this->tx_pin = tx_pin;
-  gpio_init(this->tx_pin);
-  gpio_set_dir(this->tx_pin, GPIO_OUT);
 
-  this->state = ManchesterTxState::IDLE;
-  this->state_data.idle = {};
+  this->pio = pio0; // try this pio block
+  if (!pio_can_add_program(this->pio, &manchester_tx_program)) {
+    this->pio = pio1;
+    if (!pio_can_add_program(pio, &manchester_tx_program)) { // try the other
+      printf("Cannot instantiate PIO RX");
+      return;
+    }
+  }
 
-  this->clock_period = clock_period;
-  add_alarm_in_us(this->clock_period, transmit_alarm, this, true);
+  uint offset_rx = pio_add_program(pio, &manchester_tx_program);
+
+  sm = pio_claim_unused_sm(pio, true);
+
+  float div =
+      clock_get_hz(clk_sys) /
+      (1000000.0f / clock_period * 12); // for each bit the PIO has 12 cicles
+
+  manchester_tx_program_init(pio, sm, offset_rx, this->tx_pin, div);
+
+  dma_chan = dma_claim_unused_channel(true);
 }
-
-long long ManchesterTx::transmit_alarm(alarm_id_t id, void *data) {
-  ManchesterTx *tx = (ManchesterTx *)data;
-  switch (tx->state) {
-  case ManchesterTxState::IDLE: {
-    frame_t f;
-    if (tx->data.read_frame(f)) {
-      tx->state = ManchesterTxState::SENDING_PREAMBLE;
-      tx->state_data.send_preamble = {.sent_first_part = false,
-                                      .bit_idx = 0,
-                                      .byte_idx = 0,
-                                      .frame_to_send = f};
-    }
-    break;
-  }
-  case ManchesterTxState::SENDING_PREAMBLE: {
-    if (tx->state_data.send_preamble.byte_idx < PREAMBLE_SIZE) {
-      uint8_t current_byte =
-          tx->preamble[tx->state_data.send_preamble.byte_idx];
-      bool current_bit =
-          (current_byte >> (7 - tx->state_data.send_preamble.bit_idx)) & 1;
-
-      if (!tx->state_data.send_preamble
-               .sent_first_part) { // send bit 0 1 for 1, 1 0 for 0
-        if (current_bit == 1) {
-          gpio_put(tx->tx_pin, 0);
-        } else {
-          gpio_put(tx->tx_pin, 1);
-        }
-        tx->state_data.send_preamble.sent_first_part = true;
-      } else {
-        if (current_bit == 1) {
-          gpio_put(tx->tx_pin, 1);
-        } else {
-          gpio_put(tx->tx_pin, 0);
-        }
-        tx->state_data.send_preamble.bit_idx++;
-        tx->state_data.send_preamble.sent_first_part = false;
-        if (tx->state_data.send_preamble.bit_idx == 8) {
-          tx->state_data.send_preamble.bit_idx = 0;
-          tx->state_data.send_preamble.byte_idx++;
-        }
-      }
-      break;
-    } else { // go to SENDING_DATA if preamble done
-      tx->state = ManchesterTxState::SENDING_DATA;
-      frame_t f = tx->state_data.send_preamble.frame_to_send;
-      tx->state_data.send_data = {.sent_first_part = false,
-                                  .bit_idx = 0,
-                                  .byte_idx = 0,
-                                  .current_frame = f};
-
-      // Here I let it fall in the next case
-    }
-  }
-  case ManchesterTxState::SENDING_DATA: {
-    if (tx->state_data.send_data.byte_idx >=
-        tx->state_data.send_data.current_frame.size) {
-      gpio_put(tx->tx_pin, 0);
-      tx->state = ManchesterTxState::SILENCE;
-      tx->state_data = {
-          .silence = {
-              .nr_silence = 8, // TODO: Remove this hardcoded value
-          }};
-      break;
-    }
-
-    // same logic as preamble
-    uint8_t current_byte = tx->state_data.send_data.current_frame
-                               .payload[tx->state_data.send_data.byte_idx];
-    bool current_bit =
-        (current_byte >> (7 - tx->state_data.send_data.bit_idx)) & 1;
-
-    if (!tx->state_data.send_data.sent_first_part) {
-      if (current_bit == 1) {
-        gpio_put(tx->tx_pin, 0);
-      } else {
-        gpio_put(tx->tx_pin, 1);
-      }
-      tx->state_data.send_data.sent_first_part = true;
-    } else {
-      if (current_bit == 1) {
-        gpio_put(tx->tx_pin, 1);
-      } else {
-        gpio_put(tx->tx_pin, 0);
-      }
-      tx->state_data.send_data.bit_idx++;
-      tx->state_data.send_data.sent_first_part = false;
-      if (tx->state_data.send_data.bit_idx == 8) {
-        tx->state_data.send_data.bit_idx = 0;
-        tx->state_data.send_data.byte_idx++;
-      }
-    }
-    break;
-  }
-  case ManchesterTxState::SILENCE: {
-    if (tx->state_data.silence.nr_silence > 0) {
-      tx->state_data.silence.nr_silence--;
-    } else {
-      tx->state = ManchesterTxState::IDLE;
-      tx->state_data = {};
-    }
-    break;
-  }
-  }
-  return tx->clock_period >> 1;
-}
-
 bool ManchesterTx::Send(std::vector<uint8_t> payload) {
-  frame_t f;
-  if (payload.size() > MAX_FRAME_SIZE) {
-    printf("Payload is too large\n");
-    return false;
-  }
+  std::vector<uint8_t> start_frame(preamble, preamble + PREAMBLE_SIZE);
+  start_frame.push_back(SFD);
 
-  f.size = payload.size();
-  memcpy(f.payload, payload.data(), payload.size());
-  if (!this->data.write_frame(f)) {
-    printf("No space available\n");
-    return false;
-  }
+  payload.insert(payload.begin(), start_frame.begin(), start_frame.end());
+
+  payload.push_back(EFD);
+
+  dma_channel_config c = dma_channel_get_default_config(dma_chan);
+
+  channel_config_set_transfer_data_size(&c, DMA_SIZE_8);
+  channel_config_set_read_increment(&c, true);
+  channel_config_set_write_increment(&c, false);
+  channel_config_set_dreq(&c, pio_get_dreq(this->pio, sm, true));
+
+  dma_channel_configure(dma_chan, &c,
+                        (volatile uint8_t *)&this->pio->txf[sm] + 3,
+                        payload.data(), payload.size(), true);
+  dma_channel_wait_for_finish_blocking(dma_chan);
 
   return true;
 }
