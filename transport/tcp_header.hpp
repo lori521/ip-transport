@@ -118,14 +118,6 @@ struct tcp_packet {
     // sending/receivind raw data 
     bool decapsulate_package(tcp_pseudoheader *pshdr_addr, uint8_t *raw_buffer, uint16_t raw_buffer_length);
     uint8_t* encapsulate_package(tcp_pseudoheader *pshdr_addr, uint16_t &package_length);
-    
-    // 3 waay handshake to establish connection
-    bool establish_connection_receiver(int socketfd, tcp_pseudoheader *pshdr_addr, uint16_t dest_port, uint16_t src_port);
-    bool establish_connection_sender(int socketfd, tcp_pseudoheader *pshdr_addr, uint16_t dest_port, uint16_t src_port, struct sockaddr_in *receiver_addr);
-    
-    // 4 way handshake to finish onnection
-    bool finish_connection_receiver(int socketfd, tcp_pseudoheader *pshdr_addr, uint16_t dest_port, uint16_t src_port);
-    bool finish_connection_sender(int socketfd, tcp_pseudoheader *pshdr_addr, uint16_t dest_port, uint16_t src_port, struct sockaddr_in *receiver_addr);
 } __attribute__((packed));
 
 class tcp_layer {
@@ -137,10 +129,19 @@ public:
     tcp_layer(IPv4 &new_ipv4_layer);
     ~tcp_layer();
 
+
     // GETTER
     state get_state();
     // SETTER
     void set_state(state new_state);
+
+    // 3 waay handshake to establish connection
+    bool establish_connection_receiver(int socketfd, tcp_pseudoheader *pshdr_addr, uint16_t dest_port, uint16_t src_port);
+    bool establish_connection_sender(int socketfd, tcp_pseudoheader *pshdr_addr, uint16_t dest_port, uint16_t src_port, struct sockaddr_in *receiver_addr);
+    
+    // 4 way handshake to finish onnection
+    bool finish_connection_receiver(int socketfd, tcp_pseudoheader *pshdr_addr, uint16_t dest_port, uint16_t src_port);
+    bool finish_connection_sender(int socketfd, tcp_pseudoheader *pshdr_addr, uint16_t dest_port, uint16_t src_port, struct sockaddr_in *receiver_addr);
 };
 
 uint32_t generate_random_sequence_number();
