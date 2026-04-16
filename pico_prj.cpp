@@ -12,6 +12,7 @@
 #include "ethernet/ethernet.hpp"
 #include "ip/ip.hpp"
 #include "manchester_codec/manchester.hpp"
+#include "transport/tcp_header.hpp"
 
 // GPIO defines
 #define BAUD_RATE 9600
@@ -41,37 +42,57 @@ void sender(Manchester &manchester) {
   Ethernet ethernet;
   ethernet.init(source_mac_address, destination_mac_address, ether_type);
   
-  ip_settings.allow_fragmentation = true;
-  ip_settings.max_fragment_len = 28;
-  IPv4 ip(manchester, ethernet, ip_settings);
+  ipv4_settings_t sender_settings("192.168.100.1", TCP);
+  IPv4 ip(manchester, ethernet, sender_settings);
 
-  while (1) {
-    ip.SendIPPacket(sending_data, destination_ip_address);
-    sleep_ms(250);
+  tcp_layer tcp(ip);
+
+  sleep_ms(500);
+
+  printf("\n[SENDER] Begin connection establish...\n");
+  if (tcp.establish_connection_sender(destination_ip_address, 8080, 12345)) {
+      
+      printf("\n[SENDER] Begin connection teardown...\n");
+      tcp.finish_connection_sender(destination_ip_address, 8080, 12345);
+      
+  } else {
+      printf("[SENDER] Handshake failed!\n");
   }
+  
+  printf("[SENDER] Core 1 finished execution.\n");
 }
 
 void receiver(Manchester &manchester) {
   Ethernet ethernet;
   ethernet.init(destination_mac_address, source_mac_address, ether_type);
 
-  IPv4 ip(manchester, ethernet, ip_settings);
-  while (1) {
-    char src_addr[16];
-    vector<uint8_t> payload;
-    ip.ReadIPPacket(payload, src_addr);
+  ipv4_settings_t receiver_settings("192.168.100.2", TCP);
+  IPv4 ip(manchester, ethernet, receiver_settings);
 
-    string s;
-    for (uint8_t c : payload) {
-      s.push_back(c);
-    }
-    printf("Received message from %s:\n\tMsg: %s\n", src_addr, s.c_str());
+  tcp_layer tcp(ip);
+
+  printf("\n[RECEIVER] Begin connection establish...\n");
+  if (tcp.establish_connection_receiver((char*)"192.168.100.1", 12345, 8080)) {
+      
+      printf("\n[RECEIVER] Waiting for connection teardown...\n");
+      tcp.finish_connection_receiver((char*)"192.168.100.1", 12345, 8080);
+
+  } else {
+      printf("[RECEIVER] Handshake failed!\n");
   }
+
+  printf("[RECEIVER] Core 0 finished execution.\n");
 }
+
+Manchester global_manchester;
 
 int main() {
   stdio_init_all();
 
+  while (!stdio_usb_connected()) {
+      sleep_ms(100);
+  }
+  
   // Initialise the Wi-Fi chip
   if (cyw43_arch_init()) {
     printf("Wi-Fi init failed\n");
@@ -82,27 +103,28 @@ int main() {
   cyw43_arch_gpio_put(CYW43_WL_GPIO_LED_PIN, 1);
 
   // Initialise Manchester
-  Manchester manchester;
-  manchester.init(TX_PIN, RX_PIN, BAUD_RATE, CLOCK_PERIOD_US);
+  global_manchester.init(TX_PIN, RX_PIN, BAUD_RATE, CLOCK_PERIOD_US);
 
   string type = "test";
 
   if (type == "sender") {
-    sender(manchester);
+    sender(global_manchester);
   } else if (type == "receiver") {
-    receiver(manchester);
+    receiver(global_manchester);
   } else if (type == "test") {
 
     multicore_launch_core1([]() {
-      Manchester manchester;
-      manchester.init(TX_PIN, RX_PIN, BAUD_RATE, CLOCK_PERIOD_US);
-      sender(manchester);
+      sender(global_manchester);
     });
 
-    receiver(manchester);
+    receiver(global_manchester);
   } else {
     printf("Invalid type. Choose between \"sender\" and \"receiver\" \n");
     return -1;
+  }
+
+  while (1) {
+      sleep_ms(1000); 
   }
 
   return 0;
