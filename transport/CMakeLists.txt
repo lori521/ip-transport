@@ -3,12 +3,17 @@ include($ENV{PICO_SDK_PATH}/external/pico_sdk_import.cmake)
 
 # Create the library
 add_library(tcp
-        tcp.cpp
+    tcp.cpp
+    tcp_packet_io.cpp
+    tcp_packet.cpp
+    tcp_state_machine.cpp
+    tcp_wrapper.cpp
 )
 
 # Add include directories
 target_include_directories(tcp PUBLIC
-    ${CMAKE_CURRENT_SOURCE_DIR}
+    .
+    ..
 )
 
 # Link against pico standard library
