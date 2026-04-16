@@ -5,10 +5,12 @@
 #include <stdint.h>
 #include <unistd.h>
 #include <iostream>
-#include <arpa/inet.h>
+#include <stdint.h>
 #include <cstdlib>
 #include  "../ip/header/header.hpp"
 #include "../ip/ip.hpp"
+#include "../ethernet/ethernet.hpp"
+#include "utils/tcp_utils.hpp"
 #include <sys/wait.h>
 #include <unistd.h>
 #include <random>
@@ -72,7 +74,7 @@ private:
     uint16_t window;
     uint16_t checksum;
     uint16_t urgent_pointer;
-    char options[];
+    // char options[];
 
 public:
     // functions to construct header
@@ -136,12 +138,12 @@ public:
     void set_state(state new_state);
 
     // 3 waay handshake to establish connection
-    bool establish_connection_receiver(int socketfd, tcp_pseudoheader *pshdr_addr, uint16_t dest_port, uint16_t src_port);
-    bool establish_connection_sender(int socketfd, tcp_pseudoheader *pshdr_addr, uint16_t dest_port, uint16_t src_port, struct sockaddr_in *receiver_addr);
+    bool establish_connection_receiver(char*  dest_ip, uint16_t dest_port, uint16_t src_port);
+    bool establish_connection_sender(char* dest_ip, uint16_t dest_port, uint16_t src_port);
     
     // 4 way handshake to finish onnection
-    bool finish_connection_receiver(int socketfd, tcp_pseudoheader *pshdr_addr, uint16_t dest_port, uint16_t src_port);
-    bool finish_connection_sender(int socketfd, tcp_pseudoheader *pshdr_addr, uint16_t dest_port, uint16_t src_port, struct sockaddr_in *receiver_addr);
+    bool finish_connection_receiver(char *dest_ip, uint16_t dest_port, uint16_t src_port);
+    bool finish_connection_sender(char* dest_ip, uint16_t dest_port, uint16_t src_port);
 };
 
 uint32_t generate_random_sequence_number();
