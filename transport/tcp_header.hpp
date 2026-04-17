@@ -129,7 +129,7 @@ private:
     state current_state;
 public:
     tcp_layer(IPv4 &new_ipv4_layer);
-    ~tcp_layer();
+    ~tcp_layer() {}
 
 
     // GETTER

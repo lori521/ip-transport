@@ -47,18 +47,22 @@ void sender(Manchester &manchester) {
 
   tcp_layer tcp(ip);
 
+  printf("[SENDER] wait 5 seconds before sending SYN...\n");
+  sleep_ms(5000);
+
   sleep_ms(500);
 
-  printf("\n[SENDER] Begin connection establish...\n");
-  if (tcp.establish_connection_sender(destination_ip_address, 8080, 12345)) {
-      
-      printf("\n[SENDER] Begin connection teardown...\n");
-      tcp.finish_connection_sender(destination_ip_address, 8080, 12345);
-      
-  } else {
-      printf("[SENDER] Handshake failed!\n");
+  while(1) {
+    printf("\n[SENDER] Begin connection establish...\n");
+      if (tcp.establish_connection_sender(destination_ip_address, 8080, 12345)) {
+        
+        printf("\n[SENDER] Begin connection teardown...\n");
+        tcp.finish_connection_sender(destination_ip_address, 8080, 12345);
+        
+      } else {
+        printf("[SENDER] Handshake failed!\n");
+      }
   }
-  
   printf("[SENDER] Core 1 finished execution.\n");
 }
 
@@ -71,14 +75,16 @@ void receiver(Manchester &manchester) {
 
   tcp_layer tcp(ip);
 
-  printf("\n[RECEIVER] Begin connection establish...\n");
-  if (tcp.establish_connection_receiver((char*)"192.168.100.1", 12345, 8080)) {
-      
-      printf("\n[RECEIVER] Waiting for connection teardown...\n");
-      tcp.finish_connection_receiver((char*)"192.168.100.1", 12345, 8080);
+  while(1) {
+    printf("\n[RECEIVER] Begin connection establish...\n");
+    if (tcp.establish_connection_receiver((char*)"192.168.100.1", 12345, 8080)) {
+        
+        printf("\n[RECEIVER] Waiting for connection teardown...\n");
+        tcp.finish_connection_receiver((char*)"192.168.100.1", 12345, 8080);
 
-  } else {
-      printf("[RECEIVER] Handshake failed!\n");
+    } else {
+        printf("[RECEIVER] Handshake failed!\n");
+    }
   }
 
   printf("[RECEIVER] Core 0 finished execution.\n");
@@ -105,7 +111,7 @@ int main() {
   // Initialise Manchester
   global_manchester.init(TX_PIN, RX_PIN, BAUD_RATE, CLOCK_PERIOD_US);
 
-  string type = "test";
+  string type = "sender";
 
   if (type == "sender") {
     sender(global_manchester);
@@ -116,7 +122,6 @@ int main() {
     multicore_launch_core1([]() {
       sender(global_manchester);
     });
-
     receiver(global_manchester);
   } else {
     printf("Invalid type. Choose between \"sender\" and \"receiver\" \n");
