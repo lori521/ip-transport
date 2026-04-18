@@ -307,172 +307,182 @@ bool tcp_layer::establish_connection_sender(char* dest_ip, uint16_t dest_port, u
 // -> receive ACK (ack #n + 1)
 // -> print finished connection receiver for debugging
 bool tcp_layer::finish_connection_receiver(char *dest_ip, uint16_t dest_port, uint16_t src_port) {
-    // new buffer to receive fin packet
     // receive ip packet vector
     vector<uint8_t> received_payload;
     char received_sender_ip[16];
-
-    // update state 
-    this->current_state = LISTEN;
-
-
-    // hopefully receiving fin
-    printf("[SERVER] waiting for FIN...\n"); fflush(stdout);
     bool check;
-    bool valid_packet = false;
-    while (!valid_packet) {
-        check = ipv4_layer.ReadIPPacket(received_payload, received_sender_ip);
-        if (!check)  {
-            sleep_ms(2);
-            continue;
-        } 
-    
-        if (inet_addr(received_sender_ip) != ipv4_layer.GetSourceAddress()) {
-            valid_packet = true;
-        } else {
-            printf("[CLIENT] Ignoring loopback, retrying...\n");
-            received_payload.clear();
-        }
-    }
-    // printf("[SERVER] received %d bytes\n", rc); fflush(stdout);
 
-    // sanity check
-    if (!check) {
-        printf("could not get fin packet :/\n");
+    switch (this->get_state())
+    {
+    case ESTABLISHED: {
+        this->set_state(LISTEN);
+        // hopefully receiving fin
+        printf("[SERVER] waiting for FIN...\n"); fflush(stdout);
         return false;
     }
-
-    uint32_t receiver_ip_addr = ipv4_layer.GetSourceAddress();
-    uint32_t sender_ip_addr = inet_addr(received_sender_ip);
-
-    // create pseudoheader
-    tcp_pseudoheader fin_pshdr = tcp_pseudoheader(sender_ip_addr, receiver_ip_addr, received_payload.size());
-
-    bool decap_check;
-    tcp_packet received_packet;
-    decap_check = received_packet.decapsulate_package(&fin_pshdr, received_payload.data(), received_payload.size());
-
-    // sanity check for decapsulation
-    if (!decap_check) {
-        printf("could not decapsulate fin packet :/\n");
-        return false;
-    }
-
-    // check to see if flag is fin
-    if (!(received_packet.tcp_hdr.get_flag() & TCP_FIN)) {
-        printf("fin was not received :/\n");
-        return false;
-    }
-
-    // send ack packet with and ack_number m + 1
-    // save sequence number to check next packet 
-    uint32_t check_sequence = received_packet.tcp_hdr.get_sequence();
-    received_payload.clear();
-    received_packet.free_package();
-
-    // update state
-    this->current_state = CLOSE_WAIT;
-
-    // make new header
-    tcp_header ack_header = tcp_header(src_port, dest_port);
-    ack_header.set_flag(TCP_ACK);
-    ack_header.set_ack_number(check_sequence + 1);
-
-    // create pseudoheader
-    tcp_pseudoheader ack_pshdr = tcp_pseudoheader(receiver_ip_addr, sender_ip_addr, 20);
-    // prepare packet
-    tcp_packet ack_packet = tcp_packet(ack_pshdr, ack_header, nullptr, 0);
-
-    // prepare packet to be sent 
-    uint16_t package_length = 0;
-    uint8_t *send_buffer = ack_packet.encapsulate_package(&ack_pshdr, package_length);
-    vector<uint8_t> ack_payload(send_buffer, send_buffer + package_length);
-    free(send_buffer);
-
-    // send ack package to sender
-    ipv4_layer.SendIPPacket(ack_payload, received_sender_ip, hardcoded_mac);
-    ack_packet.free_package();
-
-    // update state
-    this->current_state = LAST_ACK;
-
-    // send fin packet with and new seq 
-    // save sequence number to check next packet 
-    uint32_t new_seq_number = generate_random_sequence_number();
-    // make new header
-    tcp_header fin_header = tcp_header(src_port, dest_port);
-    fin_header.set_flag(TCP_FIN);
-    fin_header.set_sequence(new_seq_number);
-
-    // create pseudoheader
-    tcp_pseudoheader fin_send_pshdr = tcp_pseudoheader(receiver_ip_addr, sender_ip_addr, 20);
-
-    // prepare packet
-    tcp_packet fin_packet = tcp_packet(fin_send_pshdr, fin_header, nullptr, 0);
-
-    // prepare packet to be sent 
-    package_length = 0;
-    send_buffer = fin_packet.encapsulate_package(&fin_send_pshdr, package_length);
-    vector<uint8_t> fin_payload(send_buffer, send_buffer + package_length);
-    free(send_buffer);
-
-    // send fin package to sender
-    ipv4_layer.SendIPPacket(fin_payload, received_sender_ip, hardcoded_mac);
-    fin_packet.free_package();
-
-    // hopefully getting ack n + 1 to finish connection
-    received_payload.clear();
-
-    valid_packet = false;
-    while (!valid_packet) {
-        check = ipv4_layer.ReadIPPacket(received_payload, received_sender_ip);
-        if (!check)  {
-            sleep_ms(2);
-            continue;
-        } 
+    case LISTEN: {
         
-        // Verifică dacă nu e loopback
-        if (inet_addr(received_sender_ip) != ipv4_layer.GetSourceAddress()) {
-            valid_packet = true;
-        } else {
-            printf("[CLIENT] Ignoring loopback, retrying...\n");
-            received_payload.clear();
+
+        check = ipv4_layer.ReadIPPacket(received_payload, received_sender_ip);
+
+        // sanity check for receiving ip packet
+        if (!check) {
+            return false;
         }
+
+        // check ip sender
+        if (inet_addr(received_sender_ip) == ipv4_layer.GetSourceAddress()) {
+            return false;
+        }
+
+        // get ip addresses
+        uint32_t receiver_ip_addr = ipv4_layer.GetSourceAddress();
+        uint32_t sender_ip_addr = inet_addr(received_sender_ip);
+
+        // create pseudoheader
+        tcp_pseudoheader fin_pshdr = tcp_pseudoheader(sender_ip_addr, receiver_ip_addr, received_payload.size());
+
+        tcp_packet received_packet;
+        check = received_packet.decapsulate_package(&fin_pshdr, received_payload.data(), received_payload.size());
+
+        // sanity check for decapsulation
+        if (!check) {
+            // printf("could not decapsulate fin packet :/\n");
+            return false;
+        }
+
+        // check to see if flag is fin
+        if (!(received_packet.tcp_hdr.get_flag() & TCP_FIN)) {
+            // printf("fin was not received :/\n");
+            return false;
+        }
+
+        // send ack packet with and ack_number m + 1
+        // save sequence number to check next packet 
+        uint32_t check_sequence = received_packet.tcp_hdr.get_sequence();
+        received_payload.clear();
+        received_packet.free_package();
+
+        // update state
+        this->set_state(CLOSE_WAIT);
+
+        tcp_header ack_header = tcp_header(src_port, dest_port);
+        ack_header.set_flag(TCP_ACK);
+        ack_header.set_ack_number(check_sequence + 1);
+
+        // create pseudoheader
+        tcp_pseudoheader ack_pshdr = tcp_pseudoheader(receiver_ip_addr, sender_ip_addr, 20);
+        // prepare packet
+        tcp_packet ack_packet = tcp_packet(ack_pshdr, ack_header, nullptr, 0);
+
+        // prepare packet to be sent 
+        uint16_t package_length = 0;
+        uint8_t *send_buffer = ack_packet.encapsulate_package(&ack_pshdr, package_length);
+        vector<uint8_t> ack_payload(send_buffer, send_buffer + package_length);
+        free(send_buffer);
+
+        // send ack package to sender
+        ipv4_layer.SendIPPacket(ack_payload, received_sender_ip, hardcoded_mac);
+        ack_packet.free_package();
+
+        sleep_ms(30);
+
+        // update state
+        this->set_state(LAST_ACK);
+
+         // send fin packet with and new seq 
+        // save sequence number to check next packet 
+        this->saved_seq_num = generate_random_sequence_number();
+        // make new header
+        tcp_header fin_header = tcp_header(src_port, dest_port);
+        fin_header.set_flag(TCP_FIN);
+        fin_header.set_sequence(this->saved_seq_num);
+
+        // create pseudoheader
+        tcp_pseudoheader fin_send_pshdr = tcp_pseudoheader(receiver_ip_addr, sender_ip_addr, 20);
+
+        // prepare packet
+        tcp_packet fin_packet = tcp_packet(fin_send_pshdr, fin_header, nullptr, 0);
+
+        // prepare packet to be sent 
+        package_length = 0;
+        send_buffer = fin_packet.encapsulate_package(&fin_send_pshdr, package_length);
+        vector<uint8_t> fin_payload(send_buffer, send_buffer + package_length);
+        free(send_buffer);
+
+        // send fin package to sender
+        ipv4_layer.SendIPPacket(fin_payload, received_sender_ip, hardcoded_mac);
+        fin_packet.free_package();
+
+        // hopefully getting ack n + 1 to finish connection
+        received_payload.clear();
+
+        return false;
+    }  
+
+    case LAST_ACK: {
+        // receive ip packet
+        check = ipv4_layer.ReadIPPacket(received_payload, received_sender_ip);
+
+        // sanity check 
+        if (!check)  {
+            return false;
+        } 
+
+        // check if sender has not the same ip as receiver
+        if (inet_addr(received_sender_ip) == ipv4_layer.GetSourceAddress()) {
+            return false;
+        }
+
+        // get ip addresses
+        uint32_t receiver_ip_addr = ipv4_layer.GetSourceAddress();
+        uint32_t sender_ip_addr = inet_addr(received_sender_ip);
+
+        // create pseudoheader
+        tcp_pseudoheader final_ack = tcp_pseudoheader(sender_ip_addr, receiver_ip_addr, received_payload.size());
+        // decapsulate package
+        tcp_packet received_packet;
+        check = received_packet.decapsulate_package(&final_ack, received_payload.data(), received_payload.size());
+        // sanity check for decapsulation
+        if (!check) {
+            // DEBUG
+            // printf("could not decapsulate ack packet :/\n");
+            return false;
+        }
+
+        // check to see if flag is set to ack
+        if (!(received_packet.tcp_hdr.get_flag() & TCP_ACK)) {
+            // DEBUG
+            // printf("ack n + 1 was not received :/\n");
+            return false;
+        }
+        // update state
+        this->current_state = LAST_ACK;
+
+        // sequence number check
+        if (received_packet.tcp_hdr.get_ack_number() != this->saved_seq_num + 1) {
+            // DEBUG
+            // printf("ACK number is incorrect :/ (receiver)\n");
+            return false;
+        }
+
+        printf("receiver connection was finished ^^\n");
+
+        received_payload.clear();
+        received_packet.free_package();
+
+        // update state
+        this->current_state = CLOSED;
+        return true;
+    }
+    
+    case CLOSED: {
+        return true;
     }
 
-    // create pseudoheader
-    tcp_pseudoheader final_ack = tcp_pseudoheader(sender_ip_addr, receiver_ip_addr, received_payload.size());
-    // decapsulate package
-    decap_check = received_packet.decapsulate_package(&final_ack, received_payload.data(), received_payload.size());
-    // sanity check for decapsulation
-    if (!decap_check) {
-        printf("could not decapsulate ack packet :/\n");
+    default:
         return false;
     }
-
-    // check to see if flag is set to ack
-    if (!(received_packet.tcp_hdr.get_flag() & TCP_ACK)) {
-        printf("ack n + 1 was not received :/\n");
-        return false;
-    }
-    // update state
-    this->current_state = LAST_ACK;
-
-    // sequence number check
-    if (received_packet.tcp_hdr.get_ack_number() != new_seq_number + 1) {
-        printf("ACK number is incorrect :/ (receiver)\n");
-        return false;
-    }
-
-    printf("receiver connection was finished ^^\n");
-
-    received_payload.clear();
-    received_packet.free_package();
-
-    // update state
-    this->current_state = CLOSED;
-
-    return true;
 }
 
 // finish_connection from client/sender's perspective -- active close
@@ -482,166 +492,158 @@ bool tcp_layer::finish_connection_receiver(char *dest_ip, uint16_t dest_port, ui
 // -> send ACK (ack #n + 1)
 // -> print finished connection sebder for debugging
 bool tcp_layer::finish_connection_sender(char* dest_ip, uint16_t dest_port, uint16_t src_port) {
-    uint32_t sender_ip_addr = ipv4_layer.GetSourceAddress();
-    uint32_t receiver_ip_addr = inet_addr(dest_ip);
-    
-    // send fin packet with m as sequence number 
-    // save sequence number to check next packet 
-    uint32_t new_seq_number = generate_random_sequence_number();
-    // make new header
-    tcp_header fin_header = tcp_header(src_port, dest_port);
-    fin_header.set_flag(TCP_FIN);
-    fin_header.set_sequence(new_seq_number);
-
-    // create pseudoheader
-    tcp_pseudoheader fin_pshdr = tcp_pseudoheader(sender_ip_addr, receiver_ip_addr, 20);
-
-    // prepare packet
-    tcp_packet fin_packet = tcp_packet(fin_pshdr, fin_header, nullptr, 0);
-
-    // prepare packet to be sent 
-    uint16_t package_length = 0;
-    uint8_t *send_buffer = fin_packet.encapsulate_package(&fin_pshdr, package_length);
-    vector<uint8_t> send_payload(send_buffer, send_buffer + package_length);
-    free(send_buffer);
-
-    // send fin package to sender
-    ipv4_layer.SendIPPacket(send_payload, dest_ip, hardcoded_mac);
-    fin_packet.free_package();
-
-    // update state
-    this->current_state = FIN_WAIT_1;
-
-    // receive ack with sequence number ack m + 1
+    // receive ip packet vector
     vector<uint8_t> received_payload;
     char received_sender_ip[16];
-    
-    // hopefully receiving  ack m + 1
-    printf("[CLIENT] waiting for FIN...\n"); fflush(stdout);
-
     bool check;
-    bool valid_packet = false;
-    while (!valid_packet) {
-        check = ipv4_layer.ReadIPPacket(received_payload, received_sender_ip);
-        if (!check)  {
-            sleep_ms(2);
-            continue;
-        } 
     
-        if (inet_addr(received_sender_ip) != ipv4_layer.GetSourceAddress()) {
-            valid_packet = true;
-        } else {
-            printf("[CLIENT] Ignoring loopback, retrying...\n");
-            received_payload.clear();
+    // ip addresses
+    uint32_t sender_ip_addr = ipv4_layer.GetSourceAddress();
+    uint32_t receiver_ip_addr = inet_addr(dest_ip);
+
+    switch (this->get_state())
+    {
+    case ESTABLISHED: {
+        // save sequence number to check next packet 
+        this->saved_seq_num = generate_random_sequence_number();
+        // make new header
+        tcp_header fin_header = tcp_header(src_port, dest_port);
+        fin_header.set_flag(TCP_FIN);
+        fin_header.set_sequence(this->saved_seq_num);
+
+        // create pseudoheader
+        tcp_pseudoheader fin_pshdr = tcp_pseudoheader(sender_ip_addr, receiver_ip_addr, 20);
+
+        // prepare packet
+        tcp_packet fin_packet = tcp_packet(fin_pshdr, fin_header, nullptr, 0);
+
+        // prepare packet to be sent 
+        uint16_t package_length = 0;
+        uint8_t *send_buffer = fin_packet.encapsulate_package(&fin_pshdr, package_length);
+        vector<uint8_t> send_payload(send_buffer, send_buffer + package_length);
+        free(send_buffer);
+
+        // send fin package to sender
+        ipv4_layer.SendIPPacket(send_payload, dest_ip, hardcoded_mac);
+        fin_packet.free_package();
+
+        // update state
+        this->set_state(FIN_WAIT_1);
+        return false;
+    }
+
+    case FIN_WAIT_1: {
+        // receive ack with sequence number ack m + 1
+        check = ipv4_layer.ReadIPPacket(received_payload, received_sender_ip);
+
+        if (!check) 
+            return false;
+
+        if (inet_addr(received_sender_ip) == ipv4_layer.GetSourceAddress())
+            return false;
+
+        // create pseudoheader
+        tcp_pseudoheader ack_recv_pshdr = tcp_pseudoheader(receiver_ip_addr, sender_ip_addr, received_payload.size());
+
+        bool decap_check;
+        tcp_packet received_packet;
+        decap_check = received_packet.decapsulate_package(&ack_recv_pshdr, received_payload.data(), received_payload.size());
+        // sanity check for decapsulation
+        if (!decap_check) {
+            // DEBUG
+            // printf("could not decapsulate ack m + 1 packet :/\n");
+            return false;
         }
-    }
-    // printf("[CLIENT] received %d bytes\n", rc); fflush(stdout);
 
-    // sanity check
-    if (!check) {
-        printf("could not get ack m + 1 packet :/\n");
+        // check to see if flag is fin
+        if (!(received_packet.tcp_hdr.get_flag() & TCP_ACK)) {
+            // DEBUG
+            // printf("ack m + 1 was not received :/\n");
+            return false;
+        }
+
+        if (received_packet.tcp_hdr.get_ack_number() != this->saved_seq_num + 1) {
+            // DEBUG
+            // printf("ack m + 1 could not match\n");
+            return false;
+        }
+
+        received_payload.clear();
+        received_packet.free_package();
+        
+        // update state
+        this->set_state(FIN_WAIT_2);
+
         return false;
     }
 
-    // create pseudoheader
-    tcp_pseudoheader ack_recv_pshdr = tcp_pseudoheader(receiver_ip_addr, sender_ip_addr, received_payload.size());
-
-    bool decap_check;
-    tcp_packet received_packet;
-    decap_check = received_packet.decapsulate_package(&ack_recv_pshdr, received_payload.data(), received_payload.size());
-    // sanity check for decapsulation
-    if (!decap_check) {
-        printf("could not decapsulate ack m + 1 packet :/\n");
-        return false;
-    }
-
-    // check to see if flag is fin
-    if (!(received_packet.tcp_hdr.get_flag() & TCP_ACK)) {
-        printf("ack m + 1 was not received :/\n");
-        return false;
-    }
-
-    if (received_packet.tcp_hdr.get_ack_number() != new_seq_number + 1) {
-        printf("ack m + 1 could not match\n");
-        return false;
-    }
-
-    received_payload.clear();
-    received_packet.free_package();
-    
-    // update state
-    this->current_state = FIN_WAIT_2;
-
-    // receive fin n
-    valid_packet = false;
-    while (!valid_packet) {
+    case FIN_WAIT_2: {
+        // receive ack with sequence number ack m + 1
         check = ipv4_layer.ReadIPPacket(received_payload, received_sender_ip);
+
+        if (!check) 
+            return false;
+
+        if (inet_addr(received_sender_ip) == ipv4_layer.GetSourceAddress())
+            return false;
+
+        // create pseudoheader
+        tcp_pseudoheader fin_recv_pshdr = tcp_pseudoheader(receiver_ip_addr, sender_ip_addr, received_payload.size());
+
+        tcp_packet received_packet;
+        check = received_packet.decapsulate_package(&fin_recv_pshdr, received_payload.data(), received_payload.size());
+        // sanity check for decapsulation
         if (!check) {
-            sleep_ms(2);
-            continue;
-        } 
-    
-        if (inet_addr(received_sender_ip) != ipv4_layer.GetSourceAddress()) {
-            valid_packet = true;
-        } else {
-            printf("[CLIENT] Ignoring loopback, retrying...\n");
-            received_payload.clear();
+            printf("could not decapsulate fin n packet :/\n");
+            return false;
         }
-    }
-    // printf("[CLIENT] received %d bytes\n", rc); fflush(stdout);
 
-    // sanity check
-    if (!check) {
-        printf("could not get fin n packet :/\n");
+        // check to see if flag is fin
+        if (!(received_packet.tcp_hdr.get_flag() & TCP_FIN)) {
+            printf("fin n was not received :/\n");
+            return false;
+        }
+
+        // send final ack n + 1
+        uint32_t check_sequence = received_packet.tcp_hdr.get_sequence();
+        received_payload.clear();
+        received_packet.free_package();
+
+        // make new header
+        tcp_header ack_header = tcp_header(src_port, dest_port);
+        ack_header.set_flag(TCP_ACK);
+        ack_header.set_ack_number(check_sequence + 1);
+
+        // create pseudoheader
+        tcp_pseudoheader ack_pshdr = tcp_pseudoheader(sender_ip_addr, receiver_ip_addr, 20);
+
+        // prepare packet
+        tcp_packet ack_packet = tcp_packet(ack_pshdr, ack_header, nullptr, 0);
+
+        // prepare packet to be sent 
+        uint16_t package_length = 0;
+        uint8_t* send_buffer = ack_packet.encapsulate_package(&ack_pshdr, package_length);
+        vector<uint8_t> final_ack_payload(send_buffer, send_buffer + package_length);
+        free(send_buffer);
+
+        // send ack package to sender
+        ipv4_layer.SendIPPacket(final_ack_payload, dest_ip, hardcoded_mac);
+        ack_packet.free_package();
+
+        printf("sender connection was finished ^^\n");
+
+        // update state
+        this->set_state(TIME_WAIT);
+        return true;
+    }
+
+    case TIME_WAIT: {
+        return true;
+    }
+    
+    default:
         return false;
     }
 
-    // create pseudoheader
-    tcp_pseudoheader fin_recv_pshdr = tcp_pseudoheader(receiver_ip_addr, sender_ip_addr, received_payload.size());
 
-    decap_check = received_packet.decapsulate_package(&fin_recv_pshdr, received_payload.data(), received_payload.size());
-    // sanity check for decapsulation
-    if (!decap_check) {
-        printf("could not decapsulate fin n packet :/\n");
-        return false;
-    }
-
-    // check to see if flag is fin
-    if (!(received_packet.tcp_hdr.get_flag() & TCP_FIN)) {
-        printf("fin n was not received :/\n");
-        return false;
-    }
-
-    // send final ack n + 1
-    uint32_t check_sequence = received_packet.tcp_hdr.get_sequence();
-    received_payload.clear();
-    received_packet.free_package();
-
-    // make new header
-    tcp_header ack_header = tcp_header(src_port, dest_port);
-    ack_header.set_flag(TCP_ACK);
-    ack_header.set_ack_number(check_sequence + 1);
-
-    // create pseudoheader
-    tcp_pseudoheader ack_pshdr = tcp_pseudoheader(sender_ip_addr, receiver_ip_addr, 20);
-
-    // prepare packet
-    tcp_packet ack_packet = tcp_packet(ack_pshdr, ack_header, nullptr, 0);
-
-    // prepare packet to be sent 
-    package_length = 0;
-    send_buffer = ack_packet.encapsulate_package(&ack_pshdr, package_length);
-    vector<uint8_t> final_ack_payload(send_buffer, send_buffer + package_length);
-    free(send_buffer);
-
-    // send ack package to sender
-    ipv4_layer.SendIPPacket(final_ack_payload, dest_ip, hardcoded_mac);
-    ack_packet.free_package();
-
-    printf("sender connection was finished ^^\n");
-
-    // update state
-    this->current_state = TIME_WAIT;
-
-    return true;
 }
