@@ -1,7 +1,7 @@
 #ifndef ETHERNET_HPP
 #define ETHERNET_HPP
 
-#include "manchester.hpp"
+#include "../manchester_nonblock/manchester.hpp"
 #include "pico/stdlib.h"
 #include <algorithm>
 #include <cstring>
