@@ -75,10 +75,13 @@ vector<uint8_t> Ethernet::eth_decap(uint8_t *frame, uint32_t frame_data_length,
     memcpy(eth_type, frame + 2 * MAC_ADDRESS_LEN, sizeof(*eth_type));
   }
 
-  // Compare MACs
-  if (memcmp(frame, source_mac, MAC_ADDRESS_LEN) != 0) {
-    printf("Destination MAC error!\n");
-    return vector<uint8_t>();
+  // broadcast support
+  uint8_t broadcast_mac_cmp[MAC_ADDRESS_LEN] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
+    
+  if (memcmp(frame, source_mac, MAC_ADDRESS_LEN) != 0 && 
+        memcmp(frame, broadcast_mac_cmp, MAC_ADDRESS_LEN) != 0) {
+      printf("Destination MAC error!\n");
+      return vector<uint8_t>();
   }
 
   if (destination_mac != NULL) {
