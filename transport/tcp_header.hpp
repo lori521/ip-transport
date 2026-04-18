@@ -127,6 +127,7 @@ private:
     /* data */
     IPv4 &ipv4_layer;
     state current_state;
+    uint32_t saved_seq_num;
 public:
     tcp_layer(IPv4 &new_ipv4_layer);
     ~tcp_layer() {}
