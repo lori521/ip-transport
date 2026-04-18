@@ -213,7 +213,8 @@ bool IPv4::PopFinishedBatch(ipv4_packet_batch_t &finished) {
   return false;
 }
 
-bool IPv4::SendIPPacket(vector<uint8_t> &payload, char *destination) {
+bool IPv4::SendIPPacket(vector<uint8_t> &payload, char *destination,
+                        uint8_t *destination_mac) {
   ipv4_packet_batch_t batch;
   if (this->GeneratePackets(payload, destination, batch) == false) {
     printf("Could not generate IP packets\n");
@@ -223,51 +224,34 @@ bool IPv4::SendIPPacket(vector<uint8_t> &payload, char *destination) {
   for (ipv4_packet_t pkt : batch.ipv4_packets) {
     vector<uint8_t> ip_payload = pkt.dump_network_packet();
 
-    vector<uint8_t> eth_payload =
-        ethernet.eth_encap(ip_payload.data(), ip_payload.size());
-
-    if (eth_payload.size() == 0) {
-      printf("Could not encode ethernet payload\n");
+    if (!this->ethernet.Send(ip_payload, destination_mac)) {
       return false;
     }
-
-    manchester.send_manchester(eth_payload.data(), eth_payload.size());
-    manchester.send_debug_print(eth_payload.data(), eth_payload.size());
   }
   return true;
 }
 
 // Reads first whole IP packet
 bool IPv4::ReadIPPacket(vector<uint8_t> &payload, ipv4_packet_header &header) {
-  ipv4_packet_batch_t batch;
-  while (!this->PopFinishedBatch(batch)) {
-    std::vector<uint8_t> manchester_payload(
-        1024); // TODO: Replace this with something not hardcoded
-    uint32_t size = manchester.recv_manchester(manchester_payload.data(),
-                                               manchester_payload.size());
-    manchester_payload.resize(size);
-    manchester.recv_debug_print(manchester_payload.data(),
-                                manchester_payload.size());
-
-    std::vector<uint8_t> eth_payload = ethernet.eth_decap(
-        manchester_payload.data(), manchester_payload.size());
-
-    if (eth_payload.size() == 0) {
-      printf("Could not read eth packet\n");
-      continue;
-    }
-
+  vector<uint8_t> eth_payload;
+  while (this->ethernet.Read(eth_payload, NULL, NULL)) {
     if (this->ReadPackets(eth_payload) == false) {
       printf("Could not read ip packet\n");
       continue;
     }
+  }
 
-    // TODO Optional: cleanup map from ip batches that where never completed
+  ipv4_packet_batch_t batch;
+  if (!this->PopFinishedBatch(batch)) {
+    return false;
   }
 
   payload.clear();
   batch.get_payload(payload);
   header = batch.ipv4_packets.begin()->header;
+
+  // TODO Optional: cleanup map from ip batches that where never completed
+
   return true;
 }
 

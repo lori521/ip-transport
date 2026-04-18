@@ -19,7 +19,6 @@ target_include_directories(ip PUBLIC
 target_link_libraries(ip
         pico_stdlib
         ethernet
-        manchester_codec
 )
 
 # Enable USB output, disable UART output
