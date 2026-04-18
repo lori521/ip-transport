@@ -77,7 +77,7 @@ pico_sdk_init()
 
 # Add executable. Default name is the project name, version 0.1
 
-add_subdirectory(manchester_codec)
+add_subdirectory(manchester_nonblock)
 
 add_subdirectory(ethernet)
 
@@ -103,7 +103,7 @@ target_link_libraries(pico_prj
 )
 
 target_link_libraries(pico_prj
-        manchester_codec)
+        manchester_nonblock)
 
 target_link_libraries(pico_prj
         ethernet)
@@ -117,6 +117,8 @@ target_include_directories(pico_prj PRIVATE
 
 # Add any user requested libraries
 target_link_libraries(pico_prj 
+        pico_stdlib
+        hardware_pio
         hardware_dma
         hardware_clocks
         pico_cyw43_arch_none
