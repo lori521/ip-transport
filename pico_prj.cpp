@@ -11,13 +11,20 @@
 
 #include "ethernet/ethernet.hpp"
 #include "ip/ip.hpp"
-#include "manchester_codec/manchester.hpp"
+#include "manchester_nonblock/manchester.hpp"
 #include "transport/tcp_header.hpp"
 
 // GPIO defines
 #define BAUD_RATE 9600
-#define TX_PIN 12
-#define RX_PIN 13
+// #define TX_PIN 12
+// #define RX_PIN 13
+
+#define TX1_PIN 12
+#define RX1_PIN 13
+
+#define TX2_PIN 10
+#define RX2_PIN 11
+
 #define CLOCK_PERIOD_US 104
 
 // Ethernet defines
@@ -38,59 +45,111 @@ char destination_ip_address[15] = "192.168.100.2";
 using namespace std;
 
 void sender(Manchester &manchester) {
-
-  Ethernet ethernet;
-  ethernet.init(source_mac_address, destination_mac_address, ether_type);
+  Ethernet ethernet(manchester, source_mac_address);
   
-  ipv4_settings_t sender_settings("192.168.100.1", TCP);
-  IPv4 ip(manchester, ethernet, sender_settings);
-
+  ipv4_settings_t sender_settings((char*)"192.168.100.1", TCP);
+  
+  IPv4 ip(ethernet, sender_settings);
   tcp_layer tcp(ip);
 
   printf("[SENDER] wait 5 seconds before sending SYN...\n");
   sleep_ms(5000);
 
-  sleep_ms(500);
-
   while(1) {
-    printf("\n[SENDER] Begin connection establish...\n");
-      if (tcp.establish_connection_sender(destination_ip_address, 8080, 12345)) {
-        
-        printf("\n[SENDER] Begin connection teardown...\n");
-        tcp.finish_connection_sender(destination_ip_address, 8080, 12345);
-        
-      } else {
-        printf("[SENDER] Handshake failed!\n");
+      printf("\n[SENDER] Begin connection establish...\n");
+      
+      while (!tcp.establish_connection_sender(destination_ip_address, 8080, 12345)) {
+          sleep_ms(1);
       }
+        
+      printf("\n[SENDER] Connection Established! Begin connection teardown...\n");
+      
+      while (!tcp.finish_connection_sender(destination_ip_address, 8080, 12345)) {
+          sleep_ms(1);
+      }
+      
+      printf("[SENDER] Handshake and Teardown complete. Restarting in 3 seconds...\n");
+      sleep_ms(3000);
   }
-  printf("[SENDER] Core 1 finished execution.\n");
 }
 
 void receiver(Manchester &manchester) {
-  Ethernet ethernet;
-  ethernet.init(destination_mac_address, source_mac_address, ether_type);
+  Ethernet ethernet(manchester, destination_mac_address);
 
-  ipv4_settings_t receiver_settings("192.168.100.2", TCP);
-  IPv4 ip(manchester, ethernet, receiver_settings);
-
+  ipv4_settings_t receiver_settings((char*)"192.168.100.2", TCP);
+  
+  IPv4 ip(ethernet, receiver_settings);
   tcp_layer tcp(ip);
 
   while(1) {
-    printf("\n[RECEIVER] Begin connection establish...\n");
-    if (tcp.establish_connection_receiver((char*)"192.168.100.1", 12345, 8080)) {
+      printf("\n[RECEIVER] Begin connection establish...\n");
+      
+      while (!tcp.establish_connection_receiver((char*)"192.168.100.1", 12345, 8080)) {
+          sleep_ms(1);
+      }
         
-        printf("\n[RECEIVER] Waiting for connection teardown...\n");
-        tcp.finish_connection_receiver((char*)"192.168.100.1", 12345, 8080);
+      printf("\n[RECEIVER] Connection Established! Waiting for connection teardown...\n");
+      
+      while (!tcp.finish_connection_receiver((char*)"192.168.100.1", 12345, 8080)) {
+          sleep_ms(1);
+      }
+      
+      printf("[RECEIVER] Teardown complete. Resetting for next connection...\n");
+  }
+}
 
-    } else {
-        printf("[RECEIVER] Handshake failed!\n");
+void run_single_core_simulation(Manchester &m_send, Manchester &m_recv) {
+  // sender init
+  Ethernet eth_send(m_send, source_mac_address);
+  ipv4_settings_t set_send((char*)"192.168.100.1", TCP);
+  IPv4 ip_send(eth_send, set_send);
+  tcp_layer tcp_send(ip_send);
+
+  // recv init
+  Ethernet eth_recv(m_recv, destination_mac_address);
+  ipv4_settings_t set_recv((char*)"192.168.100.2", TCP);
+  IPv4 ip_recv(eth_recv, set_recv);
+  tcp_layer tcp_recv(ip_recv);
+
+  printf("\n[SIM] begin 3 way handshake\n");
+  fflush(stdout); 
+
+  bool sender_established = false;
+  bool receiver_established = false;
+
+  while (!sender_established || !receiver_established) {
+      if (!sender_established) {
+          sender_established = tcp_send.establish_connection_sender(destination_ip_address, 8080, 12345);
+      }
+      if (!receiver_established) {
+          receiver_established = tcp_recv.establish_connection_receiver((char*)"192.168.100.1", 12345, 8080);
+      }
+      
+      sleep_ms(5);
+  }
+
+  printf("\n[SIM] begin 4 way handshake\n");
+  fflush(stdout);
+
+  bool sender_finished = false;
+  bool receiver_finished = false;
+
+  while (!sender_finished || !receiver_finished) {
+    if (!sender_finished) {
+        sender_finished = tcp_send.finish_connection_sender(destination_ip_address, 8080, 12345);
+    }
+    if (!receiver_finished) {
+        receiver_finished = tcp_recv.finish_connection_receiver((char*)"192.168.100.1", 12345, 8080);
     }
   }
 
-  printf("[RECEIVER] Core 0 finished execution.\n");
+  printf("\n[SIM] all good! ^^\n");
+  fflush(stdout);
 }
 
-Manchester global_manchester;
+
+Manchester manchester_sender(RX1_PIN, TX1_PIN, CLOCK_PERIOD_US);
+Manchester manchester_receiver(RX2_PIN, TX2_PIN, CLOCK_PERIOD_US);
 
 int main() {
   stdio_init_all();
@@ -109,20 +168,21 @@ int main() {
   cyw43_arch_gpio_put(CYW43_WL_GPIO_LED_PIN, 1);
 
   // Initialise Manchester
-  global_manchester.init(TX_PIN, RX_PIN, BAUD_RATE, CLOCK_PERIOD_US);
 
-  string type = "sender";
+  string type = "test";
 
   if (type == "sender") {
-    sender(global_manchester);
+    //sender(global_manchester);
   } else if (type == "receiver") {
-    receiver(global_manchester);
+    //receiver(global_manchester);
   } else if (type == "test") {
 
-    multicore_launch_core1([]() {
-      sender(global_manchester);
-    });
-    receiver(global_manchester);
+    printf("[MAIN] simulation on only one pico...\n");
+
+    run_single_core_simulation(manchester_sender, manchester_receiver);
+
+    printf("IT WORKED :))))))))\n");
+    
   } else {
     printf("Invalid type. Choose between \"sender\" and \"receiver\" \n");
     return -1;
