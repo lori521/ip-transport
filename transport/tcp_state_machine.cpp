@@ -1,6 +1,6 @@
 #include "tcp_header.hpp"
 
-// MAC de broadcast temporar pentru a trece de compilare si testare
+// MAC hardcoded
 uint8_t hardcoded_mac[6] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
 
 /* ---------- 3 way handshake to open connection --------------- */
