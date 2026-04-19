@@ -172,7 +172,6 @@ private:
     /* data */
     IPv4 &ipv4_layer;
     state current_state;
-    uint32_t saved_seq_num;
 
     // transmission control block (TCB)
     snd snd_vars;

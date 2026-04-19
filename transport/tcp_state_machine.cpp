@@ -61,6 +61,7 @@ bool tcp_layer::establish_connection_receiver(char* dest_ip, uint16_t dest_port,
         if (!(received_packet.tcp_hdr.get_flag() & TCP_SYN)) {
             // DEBUG
             // printf("could not receive syn :/\n");
+            received_packet.free_package();
             return false;
         }
 
@@ -69,12 +70,20 @@ bool tcp_layer::establish_connection_receiver(char* dest_ip, uint16_t dest_port,
 
         // prepare syn-ack packet to be sent
         // generate new sequence number for syn-ack packet
-        this->saved_seq_num = generate_random_sequence_number();
+        // initialise recv tcb
+        this->rcv_vars.irs = received_packet.tcp_hdr.get_sequence();
+        this->rcv_vars.nxt = this->rcv_vars.irs + 1;
+
+        // initialise snd tcb
+        this->snd_vars.iss = generate_random_sequence_number();
+        this->snd_vars.una = this->snd_vars.iss;
+        this->snd_vars.nxt = this->snd_vars.iss + 1;
+
         // make new header for packet
         tcp_header syn_ack_header = tcp_header(src_port, dest_port);
         syn_ack_header.set_flag(TCP_SYN | TCP_ACK);
-        syn_ack_header.set_ack_number(received_packet.tcp_hdr.get_sequence() + 1);
-        syn_ack_header.set_sequence(this->saved_seq_num);
+        syn_ack_header.set_ack_number(this->rcv_vars.nxt);
+        syn_ack_header.set_sequence(this->snd_vars.iss);
 
         // generate syn-ack pseudoheader
         tcp_pseudoheader syn_ack_pshdr(receiver_ip_addr, sender_ip_addr, 20);
@@ -96,6 +105,8 @@ bool tcp_layer::establish_connection_receiver(char* dest_ip, uint16_t dest_port,
         
         // clear buffer
         received_payload.clear();
+        syn_ack_packet.free_package();
+        received_packet.free_package();
         return false;
     }
 
@@ -137,17 +148,22 @@ bool tcp_layer::establish_connection_receiver(char* dest_ip, uint16_t dest_port,
         if (!(received_packet.tcp_hdr.get_flag() & TCP_ACK)) {
             // DEBUG
             // printf("could not receive syn :/\n");
+            received_packet.free_package();
             return false;
         }
 
         // check sequence
-        if (received_packet.tcp_hdr.get_ack_number() != this->saved_seq_num + 1) {
+        if (received_packet.tcp_hdr.get_ack_number() != this->snd_vars.nxt) {
             // DEBUG
             // printf("ACK number is incorrect :/ (receiver)\n");
+            received_packet.free_package();
             return false;
         }
 
+        this->snd_vars.una = received_packet.tcp_hdr.get_ack_number();
         printf("receiver connection was established ^^\n");
+
+        received_packet.free_package();
 
         // update state
         this->set_state(ESTABLISHED);
@@ -183,13 +199,17 @@ bool tcp_layer::establish_connection_sender(char* dest_ip, uint16_t dest_port, u
     {
     case CLOSED: {
         // generate new sequence number for syn packet
-        this->saved_seq_num = generate_random_sequence_number();
+        // initialise send tcb
+        this->snd_vars.iss = generate_random_sequence_number();
+        this->snd_vars.una = this->snd_vars.iss;
+        this->snd_vars.nxt = this->snd_vars.iss + 1;
+
         // make new pseudoheader
         tcp_pseudoheader syn_pshdr = tcp_pseudoheader(sender_ip_addr, receiver_ip_addr, 20);
         // make new header for packet
         tcp_header first_syn_header = tcp_header(src_port, dest_port);
         first_syn_header.set_flag(TCP_SYN);
-        first_syn_header.set_sequence(this->saved_seq_num);
+        first_syn_header.set_sequence(this->snd_vars.iss);
 
         // make new packet with no payload
         tcp_packet syn_packet = tcp_packet(syn_pshdr, first_syn_header, nullptr, 0);
@@ -247,23 +267,26 @@ bool tcp_layer::establish_connection_sender(char* dest_ip, uint16_t dest_port, u
         }
 
         // check sequence
-        if (received_packet.tcp_hdr.get_ack_number() != this->saved_seq_num + 1) {
+        if (received_packet.tcp_hdr.get_ack_number() != this->snd_vars.nxt) {
             printf("SYN-ACK number is incorrect :/ (sender)\n");
             received_packet.free_package();
             return false;
         }
 
-        // prepare to send ack packet
-        // save sequence number to check next packet 
-        uint32_t check_sequence = received_packet.tcp_hdr.get_sequence();
+        // update window
+        this->snd_vars.una = received_packet.tcp_hdr.get_ack_number();
+
+        // initialise update tcb
+        this->rcv_vars.irs = received_packet.tcp_hdr.get_sequence();
+        this->rcv_vars.nxt = this->rcv_vars.irs + 1;
 
         received_packet.free_package();
 
         // make new header for packet
         tcp_header ack_header = tcp_header(src_port, dest_port);
         ack_header.set_flag(TCP_ACK);
-        ack_header.set_sequence(this->saved_seq_num + 1);
-        ack_header.set_ack_number(check_sequence + 1);
+        ack_header.set_sequence(this->snd_vars.nxt);
+        ack_header.set_ack_number(this->rcv_vars.nxt);
 
         // create pseudoheader
         tcp_pseudoheader ack_pshdr = tcp_pseudoheader(sender_ip_addr, inet_addr(received_sender_ip), 20);
@@ -357,7 +380,8 @@ bool tcp_layer::finish_connection_receiver(char *dest_ip, uint16_t dest_port, ui
 
         // send ack packet with and ack_number m + 1
         // save sequence number to check next packet 
-        uint32_t check_sequence = received_packet.tcp_hdr.get_sequence();
+        this->rcv_vars.nxt++;
+
         received_payload.clear();
         received_packet.free_package();
 
@@ -366,7 +390,8 @@ bool tcp_layer::finish_connection_receiver(char *dest_ip, uint16_t dest_port, ui
 
         tcp_header ack_header = tcp_header(src_port, dest_port);
         ack_header.set_flag(TCP_ACK);
-        ack_header.set_ack_number(check_sequence + 1);
+        ack_header.set_sequence(this->snd_vars.nxt);
+        ack_header.set_ack_number(this->rcv_vars.nxt);
 
         // create pseudoheader
         tcp_pseudoheader ack_pshdr = tcp_pseudoheader(receiver_ip_addr, sender_ip_addr, 20);
@@ -383,18 +408,17 @@ bool tcp_layer::finish_connection_receiver(char *dest_ip, uint16_t dest_port, ui
         ipv4_layer.SendIPPacket(ack_payload, received_sender_ip, hardcoded_mac);
         ack_packet.free_package();
 
-        sleep_ms(30);
-
         // update state
         this->set_state(LAST_ACK);
 
          // send fin packet with and new seq 
-        // save sequence number to check next packet 
-        this->saved_seq_num = generate_random_sequence_number();
         // make new header
         tcp_header fin_header = tcp_header(src_port, dest_port);
         fin_header.set_flag(TCP_FIN);
-        fin_header.set_sequence(this->saved_seq_num);
+        fin_header.set_sequence(this->snd_vars.nxt);
+        fin_header.set_ack_number(this->rcv_vars.nxt);
+
+        this->snd_vars.nxt++;
 
         // create pseudoheader
         tcp_pseudoheader fin_send_pshdr = tcp_pseudoheader(receiver_ip_addr, sender_ip_addr, 20);
@@ -458,11 +482,13 @@ bool tcp_layer::finish_connection_receiver(char *dest_ip, uint16_t dest_port, ui
         this->current_state = LAST_ACK;
 
         // sequence number check
-        if (received_packet.tcp_hdr.get_ack_number() != this->saved_seq_num + 1) {
+        if (received_packet.tcp_hdr.get_ack_number() != this->snd_vars.nxt) {
             // DEBUG
             // printf("ACK number is incorrect :/ (receiver)\n");
             return false;
         }
+
+        this->snd_vars.una = received_packet.tcp_hdr.get_ack_number();
 
         printf("receiver connection was finished ^^\n");
 
@@ -502,12 +528,13 @@ bool tcp_layer::finish_connection_sender(char* dest_ip, uint16_t dest_port, uint
     switch (this->get_state())
     {
     case ESTABLISHED: {
-        // save sequence number to check next packet 
-        this->saved_seq_num = generate_random_sequence_number();
         // make new header
         tcp_header fin_header = tcp_header(src_port, dest_port);
         fin_header.set_flag(TCP_FIN);
-        fin_header.set_sequence(this->saved_seq_num);
+        fin_header.set_sequence(this->snd_vars.nxt);
+        fin_header.set_ack_number(this->rcv_vars.nxt);
+
+        this->snd_vars.nxt++;
 
         // create pseudoheader
         tcp_pseudoheader fin_pshdr = tcp_pseudoheader(sender_ip_addr, receiver_ip_addr, 20);
@@ -560,11 +587,13 @@ bool tcp_layer::finish_connection_sender(char* dest_ip, uint16_t dest_port, uint
             return false;
         }
 
-        if (received_packet.tcp_hdr.get_ack_number() != this->saved_seq_num + 1) {
+        if (received_packet.tcp_hdr.get_ack_number() != this->snd_vars.nxt) {
             // DEBUG
             // printf("ack m + 1 could not match\n");
             return false;
         }
+
+        this->snd_vars.una = received_packet.tcp_hdr.get_ack_number();
 
         received_payload.clear();
         received_packet.free_package();
@@ -603,14 +632,16 @@ bool tcp_layer::finish_connection_sender(char* dest_ip, uint16_t dest_port, uint
         }
 
         // send final ack n + 1
-        uint32_t check_sequence = received_packet.tcp_hdr.get_sequence();
+        this->rcv_vars.nxt++;
+
         received_payload.clear();
         received_packet.free_package();
 
         // make new header
         tcp_header ack_header = tcp_header(src_port, dest_port);
         ack_header.set_flag(TCP_ACK);
-        ack_header.set_ack_number(check_sequence + 1);
+        ack_header.set_sequence(this->snd_vars.nxt);
+        ack_header.set_ack_number(this->rcv_vars.nxt);
 
         // create pseudoheader
         tcp_pseudoheader ack_pshdr = tcp_pseudoheader(sender_ip_addr, receiver_ip_addr, 20);
