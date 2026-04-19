@@ -49,6 +49,51 @@ enum state {
     LAST_ACK
 };
 
+// send sequence variables
+struct snd {
+    // send unacknowledged
+    uint32_t una;
+    // send next
+    uint32_t nxt;
+    // send window
+    uint16_t wnd;
+    // send urgent pointer
+    uint32_t up;
+    // segment sequence number used for last window update
+    uint32_t wl1;
+    // segment acknowledgment number used for last window update
+    uint32_t wl2;
+    // initial send sequence number
+    uint32_t iss;
+};
+
+// receive sequence variables
+struct rcv {
+    // receive next
+    uint32_t nxt;
+    // receive window
+    uint16_t wnd;
+    // receive urgent pointer
+    uint32_t up;
+    // initial receive sequence number
+    uint32_t irs;
+};
+
+// current segment variables
+struct seg {
+    // segment sequence number
+    uint32_t seq;
+    // segment acknowledgment number
+    uint32_t ack;
+    // segment length
+    uint32_t len;
+    // segment window
+    uint16_t wnd;
+    // segment urgent pointer
+    uint32_t up;
+};
+
+
 // IPv4 pseudo-header -> 96 bits(12 bytes)
 // protection against misrouted segments
 struct tcp_pseudoheader {
@@ -128,6 +173,12 @@ private:
     IPv4 &ipv4_layer;
     state current_state;
     uint32_t saved_seq_num;
+
+    // transmission control block (TCB)
+    snd snd_vars;
+    rcv rcv_vars;
+    seg seg_vars;
+
 public:
     tcp_layer(IPv4 &new_ipv4_layer);
     ~tcp_layer() {}
