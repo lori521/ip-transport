@@ -1,6 +1,6 @@
 #include "tcp_header.hpp"
 
-// MAC hardcoded
+// MAC hardcoded -- NEED ARP ASAP
 uint8_t hardcoded_mac[6] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
 
 /* ---------- 3 way handshake to open connection --------------- */
@@ -321,8 +321,6 @@ bool tcp_layer::finish_connection_receiver(char *dest_ip, uint16_t dest_port, ui
         return false;
     }
     case LISTEN: {
-        
-
         check = ipv4_layer.ReadIPPacket(received_payload, received_sender_ip);
 
         // sanity check for receiving ip packet
@@ -472,7 +470,7 @@ bool tcp_layer::finish_connection_receiver(char *dest_ip, uint16_t dest_port, ui
         received_packet.free_package();
 
         // update state
-        this->current_state = CLOSED;
+        this->set_state(CLOSED);
         return true;
     }
     
@@ -630,15 +628,38 @@ bool tcp_layer::finish_connection_sender(char* dest_ip, uint16_t dest_port, uint
         ipv4_layer.SendIPPacket(final_ack_payload, dest_ip, hardcoded_mac);
         ack_packet.free_package();
 
-        printf("sender connection was finished ^^\n");
+        // printf("sender connection was finished ^^\n");
 
         // update state
         this->set_state(TIME_WAIT);
-        return true;
+        return false;
     }
 
     case TIME_WAIT: {
-        return true;
+        // wait for 2 * MLS(maximum segment lifetime) after last packet
+        // safety reasons (retransmission if the last ack is lost)
+
+        // set a non blocking timer
+        static uint32_t time_wait_start = 0;
+        
+        if (time_wait_start == 0) {
+            time_wait_start = to_ms_since_boot(get_absolute_time());
+            printf("[CLIENT] wait for 2 seconds (2xMSL)...\n"); fflush(stdout);
+        }
+
+        // wait for 2 seconds and check the left waiting time
+        if (to_ms_since_boot(get_absolute_time()) - time_wait_start >= 2000) {
+            
+            time_wait_start = 0; 
+            
+            this->set_state(CLOSED);
+            printf("[CLIENT] TIME_WAIT expired\n"); fflush(stdout);
+            printf("sender connection was finished ^^\n"); fflush(stdout);
+            
+            return true;
+        }
+
+        return false; 
     }
     
     default:
