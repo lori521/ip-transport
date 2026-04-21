@@ -48,10 +48,11 @@ struct ipv4_packet_header {
   ipv4_packet_header() = default;
   bool read_raw(std::vector<uint8_t> raw);
   ipv4_packet_header(uint16_t payload_size, ipv4_fragment_info_t fragment_info,
-                     uint32_t destination, ipv4_settings_t &settings);
+                     uint32_t source, uint32_t destination,
+                     ipv4_settings_t &settings);
   ipv4_packet_header(uint16_t payload_size, ipv4_fragment_info_t fragment_info,
-                     uint32_t destination, ipv4_settings_t &settings,
-                     const ipv4_options_t &options);
+                     uint32_t source, uint32_t destination,
+                     ipv4_settings_t &settings, const ipv4_options_t &options);
   void debug();
   uint16_t calculate_checksum();
 };

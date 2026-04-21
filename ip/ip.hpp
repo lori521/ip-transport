@@ -1,7 +1,6 @@
 #pragma once
 
-#include "ethernet.hpp"
-#include "manchester.hpp"
+#include "routing/routing.hpp"
 #include <cstdint>
 #include <header/header.hpp>
 #include <set>
@@ -18,11 +17,12 @@ struct ipv4_packet_t {
 
   ipv4_packet_t() = default;
   ipv4_packet_t(std::vector<uint8_t> payload,
-                ipv4_fragment_info_t fragment_info, uint32_t destination,
-                ipv4_settings_t &settings);
+                ipv4_fragment_info_t fragment_info, uint32_t source,
+                uint32_t destination, ipv4_settings_t &settings);
   ipv4_packet_t(std::vector<uint8_t> payload,
-                ipv4_fragment_info_t fragment_info, uint32_t destination,
-                ipv4_settings_t &settings, const ipv4_options_t &ip_options);
+                ipv4_fragment_info_t fragment_info, uint32_t source,
+                uint32_t destination, ipv4_settings_t &settings,
+                const ipv4_options_t &ip_options);
 };
 
 struct CompareByFragmentOffset {
@@ -43,7 +43,7 @@ struct ipv4_packet_batch_t {
 
 class IPv4 {
 private:
-  Ethernet &ethernet;
+  IPv4Router &router;
   ipv4_settings_t settings;
   std::unordered_map<uint16_t, ipv4_packet_batch_t> packets;
 
@@ -52,25 +52,26 @@ private:
   bool PopFinishedBatch(ipv4_packet_batch_t &finished);
   void RemoveTimedOutBatches();
 
-  ipv4_packet_batch_t RoutePacket(ipv4_packet_t packet, char *destination);
-
-  bool GeneratePackets(std::vector<uint8_t> &payload, char destination[],
-                       ipv4_packet_batch_t &batch);
-  bool GeneratePackets(std::vector<uint8_t> &payload, char *destination,
-                       ipv4_packet_batch_t &batch,
+  bool GeneratePackets(std::vector<uint8_t> &payload, uint32_t source,
+                       uint32_t destination, ipv4_packet_batch_t &batch);
+  bool GeneratePackets(std::vector<uint8_t> &payload, uint32_t source,
+                       uint32_t destination, ipv4_packet_batch_t &batch,
                        const ipv4_options_t &options);
 
 public:
-  IPv4(Ethernet &ethernet, const ipv4_settings_t &settings)
-      : ethernet(ethernet), settings(settings) {}
+  IPv4(IPv4Router &router, const ipv4_settings_t &settings)
+      : router(router), settings(settings) {}
 
   bool SendIPPacket(vector<uint8_t> &payload, char *destination,
                     uint8_t *destination_mac); // no arp for now
+  bool SendIPPacket(vector<uint8_t> &payload, uint32_t destination,
+                    uint8_t *destination_mac);
   bool ReadIPPacket(vector<uint8_t> &received_payload, char *source);
 
   // Support this for future use
   bool ReadIPPacket(vector<uint8_t> &received_payload,
                     ipv4_packet_header &header);
+  bool RedirectIPPacket(ipv4_packet_header hdr, vector<uint8_t> &payload);
 
   uint32_t GetSourceAddress();
   void GetSourceAddress(char *address);

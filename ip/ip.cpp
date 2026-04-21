@@ -35,10 +35,11 @@ bool ipv4_packet_t::read_raw(std::vector<uint8_t> raw) {
 
 ipv4_packet_t::ipv4_packet_t(std::vector<uint8_t> payload,
                              ipv4_fragment_info_t fragment_info,
-                             uint32_t destination, ipv4_settings_t &settings,
+                             uint32_t source, uint32_t destination,
+                             ipv4_settings_t &settings,
                              const ipv4_options_t &ip_options) {
-  this->header = ipv4_packet_header(payload.size(), fragment_info, destination,
-                                    settings, ip_options);
+  this->header = ipv4_packet_header(payload.size(), fragment_info, source,
+                                    destination, settings, ip_options);
   this->data = payload;
 }
 
@@ -46,15 +47,10 @@ ipv4_packet_t::ipv4_packet_t(std::vector<uint8_t> payload,
 // - allow_fragmentation is set to false, and network requires fragmentation
 // - allow_fragmentation is true, but network max_len is smaller than a minimum
 // size
-bool IPv4::GeneratePackets(std::vector<uint8_t> &payload, char *destination,
+bool IPv4::GeneratePackets(std::vector<uint8_t> &payload, uint32_t source_addr,
+                           uint32_t destination_addr,
                            ipv4_packet_batch_t &batch,
                            const ipv4_options_t &ip_options) {
-  uint32_t destination_addr;
-  if (decode_ip_address(destination, destination_addr) == false) {
-    printf("Could not parse destination addr\n");
-    return false;
-  }
-
   batch.packet_id = random();
 
   if (!this->settings.allow_fragmentation) {
@@ -96,8 +92,8 @@ bool IPv4::GeneratePackets(std::vector<uint8_t> &payload, char *destination,
               min(((i + 1) * packet_payload_size), payload.size()));
 
       ipv4_packet_t packet =
-          ipv4_packet_t(fragment_payload, fragment_info, destination_addr,
-                        settings, ip_options);
+          ipv4_packet_t(fragment_payload, fragment_info, source_addr,
+                        destination_addr, settings, ip_options);
       batch.add_packet(packet);
     }
 
@@ -111,15 +107,16 @@ bool IPv4::GeneratePackets(std::vector<uint8_t> &payload, char *destination,
                            .fragment_offset = 0,
                            .is_last = true};
 
-  ipv4_packet_t packet = ipv4_packet_t(payload, fragment_info, destination_addr,
-                                       settings, ip_options);
+  ipv4_packet_t packet = ipv4_packet_t(payload, fragment_info, source_addr,
+                                       destination_addr, settings, ip_options);
   batch.add_packet(packet);
 
   return true;
 }
-bool IPv4::GeneratePackets(std::vector<uint8_t> &payload, char destination[],
-                           ipv4_packet_batch_t &batch) {
-  return this->GeneratePackets(payload, destination, batch, ipv4_options_t());
+bool IPv4::GeneratePackets(std::vector<uint8_t> &payload, uint32_t source,
+                           uint32_t destination, ipv4_packet_batch_t &batch) {
+  return this->GeneratePackets(payload, source, destination, batch,
+                               ipv4_options_t());
 }
 
 bool ipv4_packet_batch_t::add_packet(ipv4_packet_t packet) {
@@ -215,8 +212,21 @@ bool IPv4::PopFinishedBatch(ipv4_packet_batch_t &finished) {
 
 bool IPv4::SendIPPacket(vector<uint8_t> &payload, char *destination,
                         uint8_t *destination_mac) {
+  uint32_t destination_addr;
+  if (decode_ip_address(destination, destination_addr) == false) {
+    printf("Could not parse destination addr\n");
+    return false;
+  }
+
+  Ethernet *eth = router.where(destination_addr);
+  if (eth == NULL) {
+    printf("Throwed packet. It doesn't match any entry in router\n");
+    return false;
+  }
+
   ipv4_packet_batch_t batch;
-  if (this->GeneratePackets(payload, destination, batch) == false) {
+  if (this->GeneratePackets(payload, this->settings.device_ip_address,
+                            destination_addr, batch) == false) {
     printf("Could not generate IP packets\n");
     return false;
   }
@@ -224,20 +234,71 @@ bool IPv4::SendIPPacket(vector<uint8_t> &payload, char *destination,
   for (ipv4_packet_t pkt : batch.ipv4_packets) {
     vector<uint8_t> ip_payload = pkt.dump_network_packet();
 
-    if (!this->ethernet.Send(ip_payload, destination_mac)) {
+    if (!eth->Send(ip_payload, destination_mac)) {
       return false;
     }
   }
   return true;
 }
+bool IPv4::SendIPPacket(vector<uint8_t> &payload, uint32_t destination_addr,
+                        uint8_t *destination_mac) {
+  Ethernet *eth = router.where(destination_addr);
+  if (eth == NULL) {
+    printf("Throwed packet. It doesn't match any entry in router\n");
+    return false;
+  }
 
+  ipv4_packet_batch_t batch;
+  if (this->GeneratePackets(payload, this->settings.device_ip_address,
+                            destination_addr, batch) == false) {
+    printf("Could not generate IP packets\n");
+    return false;
+  }
+
+  for (ipv4_packet_t pkt : batch.ipv4_packets) {
+    vector<uint8_t> ip_payload = pkt.dump_network_packet();
+
+    if (!eth->Send(ip_payload, destination_mac)) {
+      return false;
+    }
+  }
+  return true;
+}
+bool IPv4::RedirectIPPacket(ipv4_packet_header hdr, vector<uint8_t> &payload) {
+  Ethernet *eth = router.where(hdr.destination_ip_address);
+  if (eth == NULL) {
+    printf("Throwed packet. It doesn't match any entry in router\n");
+    return false;
+  }
+
+  ipv4_packet_batch_t batch;
+  if (this->GeneratePackets(payload, hdr.source_ip_address,
+                            hdr.destination_ip_address, batch) == false) {
+    printf("Could not generate IP packets\n");
+    return false;
+  }
+
+  for (ipv4_packet_t pkt : batch.ipv4_packets) {
+    vector<uint8_t> ip_payload = pkt.dump_network_packet();
+    uint8_t broadcast_mac[MAC_ADDRESS_LEN] = {0xFF, 0xFF, 0xFF,
+                                              0xFF, 0xFF, 0xFF};
+    if (!eth->Send(ip_payload, broadcast_mac)) {
+      return false;
+    }
+  }
+  return true;
+}
 // Reads first whole IP packet
 bool IPv4::ReadIPPacket(vector<uint8_t> &payload, ipv4_packet_header &header) {
   vector<uint8_t> eth_payload;
-  while (this->ethernet.Read(eth_payload, NULL, NULL)) {
-    if (this->ReadPackets(eth_payload) == false) {
-      printf("Could not read ip packet\n");
-      continue;
+
+  vector<Ethernet *> eths = this->router.fetchAll();
+  for (Ethernet *eth : eths) {
+    if (eth->Read(eth_payload, NULL, NULL)) {
+      if (this->ReadPackets(eth_payload) == false) {
+        printf("Could not read ip packet\n");
+        continue;
+      }
     }
   }
 
@@ -246,9 +307,23 @@ bool IPv4::ReadIPPacket(vector<uint8_t> &payload, ipv4_packet_header &header) {
     return false;
   }
 
+  // printf("Have packet\n");
   payload.clear();
   batch.get_payload(payload);
   header = batch.ipv4_packets.begin()->header;
+
+  if (header.ttl == 0) {
+    return false;
+  }
+
+  if (header.destination_ip_address != this->settings.device_ip_address) {
+    uint8_t broadcast_mac[MAC_ADDRESS_LEN] = {0xFF, 0xFF, 0xFF,
+                                              0xFF, 0xFF, 0xFF};
+    printf("Packet not for me. Rerouting...\n");
+    fflush(stdout);
+    RedirectIPPacket(header, payload);
+    return false;
+  }
 
   // TODO Optional: cleanup map from ip batches that where never completed
 
@@ -261,7 +336,10 @@ bool IPv4::ReadIPPacket(vector<uint8_t> &payload, char *source) {
     return false;
   }
 
-  encode_ip_address(header.source_ip_address, source);
+  if (source != NULL) {
+    encode_ip_address(header.source_ip_address, source);
+  }
+
   return true;
 }
 
