@@ -34,6 +34,12 @@ using namespace std;
 // OPTIONS_LENGTH -> size(Options) == (DOffset-5)*32
 // PAYLOAD_LENGTH -> variable
 
+// default maximum segment size for TCP as 1460 bytes
+#define MSS 1460
+
+// ring buffer size for tcp
+#define TCP_BUFFER_SIZE 4096
+
 // enums for state machine
 enum state {
     CLOSED,
@@ -173,6 +179,16 @@ private:
     IPv4 &ipv4_layer;
     state current_state;
 
+    // transmit/receive buffer
+    uint8_t tx_buffer[TCP_BUFFER_SIZE] __attribute__((aligned(4)));
+    uint8_t rx_buffer[TCP_BUFFER_SIZE] __attribute__((aligned(4)));
+
+    // pointer for send packet which has not received an ack
+    uint32_t tx_head = 0;
+    // pointer to empty space left in tx_buffer
+    uint32_t tx_tail = 0;
+
+
     // transmission control block (TCB)
     snd snd_vars;
     rcv rcv_vars;
@@ -195,6 +211,11 @@ public:
     // 4 way handshake to finish onnection
     bool finish_connection_receiver(char *dest_ip, uint16_t dest_port, uint16_t src_port);
     bool finish_connection_sender(char* dest_ip, uint16_t dest_port, uint16_t src_port);
+
+    // stock data in buffer
+    bool write_data_in_buffer(uint8_t* payload, uint16_t payload_length);
+    // send data 
+
 };
 
 uint32_t generate_random_sequence_number();
