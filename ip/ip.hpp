@@ -17,12 +17,11 @@ struct ipv4_packet_t {
 
   ipv4_packet_t() = default;
   ipv4_packet_t(std::vector<uint8_t> payload,
-                ipv4_fragment_info_t fragment_info, uint32_t source,
-                uint32_t destination, ipv4_settings_t &settings);
+                ipv4_fragment_info_t fragment_info, uint32_t destination,
+                ipv4_settings_t &settings);
   ipv4_packet_t(std::vector<uint8_t> payload,
-                ipv4_fragment_info_t fragment_info, uint32_t source,
-                uint32_t destination, ipv4_settings_t &settings,
-                const ipv4_options_t &ip_options);
+                ipv4_fragment_info_t fragment_info, uint32_t destination,
+                ipv4_settings_t &settings, const ipv4_options_t &ip_options);
 };
 
 struct CompareByFragmentOffset {
@@ -47,15 +46,16 @@ private:
   ipv4_settings_t settings;
   std::unordered_map<uint16_t, ipv4_packet_batch_t> packets;
 
-  bool ReadPackets(std::vector<uint8_t> &data);
+  bool ReadPackets(ipv4_packet_t packet);
+  bool RedirectIPPacket(ipv4_packet_t packet);
 
   bool PopFinishedBatch(ipv4_packet_batch_t &finished);
   void RemoveTimedOutBatches();
 
-  bool GeneratePackets(std::vector<uint8_t> &payload, uint32_t source,
-                       uint32_t destination, ipv4_packet_batch_t &batch);
-  bool GeneratePackets(std::vector<uint8_t> &payload, uint32_t source,
-                       uint32_t destination, ipv4_packet_batch_t &batch,
+  bool GeneratePackets(std::vector<uint8_t> &payload, uint32_t destination,
+                       ipv4_packet_batch_t &batch);
+  bool GeneratePackets(std::vector<uint8_t> &payload, uint32_t destination,
+                       ipv4_packet_batch_t &batch,
                        const ipv4_options_t &options);
 
 public:
@@ -71,7 +71,6 @@ public:
   // Support this for future use
   bool ReadIPPacket(vector<uint8_t> &received_payload,
                     ipv4_packet_header &header);
-  bool RedirectIPPacket(ipv4_packet_header hdr, vector<uint8_t> &payload);
 
   uint32_t GetSourceAddress();
   void GetSourceAddress(char *address);

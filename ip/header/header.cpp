@@ -144,7 +144,7 @@ bool ipv4_packet_header::read_raw(std::vector<uint8_t> raw) {
 // Create new IPv4 packet header
 ipv4_packet_header::ipv4_packet_header(uint16_t payload_size,
                                        ipv4_fragment_info_t fragment_info,
-                                       uint32_t source, uint32_t destination,
+                                       uint32_t destination,
                                        ipv4_settings_t &settings,
                                        const ipv4_options_t &options) {
 
@@ -167,16 +167,16 @@ ipv4_packet_header::ipv4_packet_header(uint16_t payload_size,
 
   this->ttl = settings.ttl;
   this->protocol = settings.protocol;
-  this->source_ip_address = source;
+  this->source_ip_address = settings.device_ip_address;
   this->destination_ip_address = destination;
   this->header_check_sum = calculate_checksum();
 }
 ipv4_packet_header::ipv4_packet_header(uint16_t payload_size,
                                        ipv4_fragment_info_t fragment_info,
-                                       uint32_t source, uint32_t destination,
+                                       uint32_t destination,
                                        ipv4_settings_t &settings)
-    : ipv4_packet_header(payload_size, fragment_info, source, destination,
-                         settings, ipv4_options_t()) {}
+    : ipv4_packet_header(payload_size, fragment_info, destination, settings,
+                         ipv4_options_t()) {}
 uint16_t ipv4_packet_header::calculate_checksum() {
   uint16_t preserve_checksum = this->header_check_sum;
   this->header_check_sum = 0;
@@ -195,6 +195,10 @@ uint16_t ipv4_packet_header::calculate_checksum() {
 
   this->header_check_sum = preserve_checksum;
   return (~sum) & 0b1111111111111111;
+}
+void ipv4_packet_header::redirect() {
+  this->ttl--;
+  this->header_check_sum = this->calculate_checksum();
 }
 
 void ipv4_packet_header::debug() {
