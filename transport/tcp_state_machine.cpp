@@ -1,8 +1,5 @@
 #include "tcp_header.hpp"
 
-// MAC hardcoded
-uint8_t hardcoded_mac[6] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
-
 /* ---------- 3 way handshake to open connection --------------- */
 // establish_connetion from server/receiver's perspective
 // -> receive SYN(syn#A)
@@ -91,7 +88,7 @@ bool tcp_layer::establish_connection_receiver(char* dest_ip, uint16_t dest_port,
         free(send_buffer);
         // send syn-ack packet
         printf("[SERVER] sending SYN-ACK...\n"); fflush(stdout);
-        ipv4_layer.SendIPPacket(send_payload, received_sender_ip, hardcoded_mac);
+        ipv4_layer.SendIPPacket(send_payload, received_sender_ip);
         printf("[SERVER] SYN-ACK sent, waiting for ACK...\n"); fflush(stdout);
         
         // clear buffer
@@ -203,7 +200,7 @@ bool tcp_layer::establish_connection_sender(char* dest_ip, uint16_t dest_port, u
         // convert buffer
         vector<uint8_t> send_payload(send_buffer, send_buffer + package_length);
         free(send_buffer);
-        ipv4_layer.SendIPPacket(send_payload, dest_ip, hardcoded_mac);
+        ipv4_layer.SendIPPacket(send_payload, dest_ip);
         printf("[CLIENT] SYN sent, waiting for SYN-ACK...\n"); fflush(stdout);
         
         syn_packet.free_package();
@@ -279,7 +276,7 @@ bool tcp_layer::establish_connection_sender(char* dest_ip, uint16_t dest_port, u
         vector<uint8_t> ack_payload(send_buffer, send_buffer + package_length);
         free(send_buffer);
 
-        ipv4_layer.SendIPPacket(ack_payload, received_sender_ip, hardcoded_mac);
+        ipv4_layer.SendIPPacket(ack_payload, received_sender_ip);
         ack_packet.free_package();
 
         printf("sender connection was established ^^\n");
@@ -382,7 +379,7 @@ bool tcp_layer::finish_connection_receiver(char *dest_ip, uint16_t dest_port, ui
         free(send_buffer);
 
         // send ack package to sender
-        ipv4_layer.SendIPPacket(ack_payload, received_sender_ip, hardcoded_mac);
+        ipv4_layer.SendIPPacket(ack_payload, received_sender_ip);
         ack_packet.free_package();
 
         sleep_ms(30);
@@ -411,7 +408,7 @@ bool tcp_layer::finish_connection_receiver(char *dest_ip, uint16_t dest_port, ui
         free(send_buffer);
 
         // send fin package to sender
-        ipv4_layer.SendIPPacket(fin_payload, received_sender_ip, hardcoded_mac);
+        ipv4_layer.SendIPPacket(fin_payload, received_sender_ip);
         fin_packet.free_package();
 
         // hopefully getting ack n + 1 to finish connection
@@ -524,7 +521,7 @@ bool tcp_layer::finish_connection_sender(char* dest_ip, uint16_t dest_port, uint
         free(send_buffer);
 
         // send fin package to sender
-        ipv4_layer.SendIPPacket(send_payload, dest_ip, hardcoded_mac);
+        ipv4_layer.SendIPPacket(send_payload, dest_ip);
         fin_packet.free_package();
 
         // update state
@@ -627,7 +624,7 @@ bool tcp_layer::finish_connection_sender(char* dest_ip, uint16_t dest_port, uint
         free(send_buffer);
 
         // send ack package to sender
-        ipv4_layer.SendIPPacket(final_ack_payload, dest_ip, hardcoded_mac);
+        ipv4_layer.SendIPPacket(final_ack_payload, dest_ip);
         ack_packet.free_package();
 
         printf("sender connection was finished ^^\n");

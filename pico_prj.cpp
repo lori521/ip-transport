@@ -46,16 +46,18 @@ uint32_t sending_data_len = sending_data.size();
 // IP defines
 char source_ip_address[15] = "192.168.100.2";
 char destination_ip_address[15] = "192.168.100.3";
+char router_ip_address[15] = "192.168.100.1";
 
 using namespace std;
 
 void sender(Manchester &manchester) {
   Ethernet ethernet(manchester, source_mac_address);
 
-  ipv4_settings_t sender_settings((char *)"192.168.100.1", TCP);
+  ipv4_settings_t sender_settings(source_ip_address, TCP);
 
-  IPv4Router router(&ethernet);
-  IPv4 ip(router, sender_settings);
+  IPv4Router router(destination_ip_address, &ethernet);
+  ARP arp(source_mac_address, source_ip_address);
+  IPv4 ip(arp, router, sender_settings);
   tcp_layer tcp(ip);
 
   printf("[SENDER] wait 5 seconds before sending SYN...\n");
@@ -84,16 +86,17 @@ void sender(Manchester &manchester) {
 void receiver(Manchester &manchester) {
   Ethernet ethernet(manchester, destination_mac_address);
 
-  ipv4_settings_t receiver_settings((char *)"192.168.100.2", TCP);
+  ipv4_settings_t receiver_settings(destination_ip_address, TCP);
 
-  IPv4Router router(&ethernet);
-  IPv4 ip(router, receiver_settings);
+  IPv4Router router(source_ip_address, &ethernet);
+  ARP arp(destination_mac_address, destination_ip_address);
+  IPv4 ip(arp, router, receiver_settings);
   tcp_layer tcp(ip);
 
   while (1) {
     printf("\n[RECEIVER] Begin connection establish...\n");
 
-    while (!tcp.establish_connection_receiver((char *)"192.168.100.1", 12345,
+    while (!tcp.establish_connection_receiver((char *)router_ip_address, 12345,
                                               8080)) {
       sleep_ms(1);
     }
@@ -101,8 +104,8 @@ void receiver(Manchester &manchester) {
     printf("\n[RECEIVER] Connection Established! Waiting for connection "
            "teardown...\n");
 
-    while (
-        !tcp.finish_connection_receiver((char *)"192.168.100.1", 12345, 8080)) {
+    while (!tcp.finish_connection_receiver((char *)router_ip_address, 12345,
+                                           8080)) {
       sleep_ms(1);
     }
 
@@ -115,8 +118,9 @@ void run_single_core_simulation() {
   Manchester manchester_sender(RX1_PIN, TX1_PIN, CLOCK_PERIOD_US);
   Ethernet eth_send(manchester_sender, source_mac_address);
   ipv4_settings_t set_send(source_ip_address, TCP);
-  IPv4Router router_send(&eth_send);
-  IPv4 ip_send(router_send, set_send);
+  IPv4Router router_send(router_ip_address, &eth_send);
+  ARP arp_send(source_mac_address, source_ip_address);
+  IPv4 ip_send(arp_send, router_send, set_send);
   tcp_layer tcp_send(ip_send);
   printf("Set up sender\n");
   fflush(stdout);
@@ -125,8 +129,9 @@ void run_single_core_simulation() {
   Manchester manchester_receiver(RX2_PIN, TX2_PIN, CLOCK_PERIOD_US);
   Ethernet eth_recv(manchester_receiver, destination_mac_address);
   ipv4_settings_t set_recv(destination_ip_address, TCP);
-  IPv4Router router_recv(&eth_recv);
-  IPv4 ip_recv(router_recv, set_recv);
+  IPv4Router router_recv(router_ip_address, &eth_recv);
+  ARP arp_recv(destination_mac_address, destination_ip_address);
+  IPv4 ip_recv(arp_recv, router_recv, set_recv);
   tcp_layer tcp_recv(ip_recv);
   printf("Set up receiver\n");
   fflush(stdout);
@@ -136,15 +141,19 @@ void run_single_core_simulation() {
   Manchester m2_router(ROUTER_RX_PIN_2, ROUTER_TX_PIN_2, CLOCK_PERIOD_US);
   Ethernet eth_router_1(m1_router, router_mac_address);
   Ethernet eth_router_2(m2_router, router_mac_address);
-  ipv4_settings_t set_router((char *)"192.168.100.1", TCP);
+  ipv4_settings_t set_router((char *)router_ip_address, TCP);
 
   IPv4Router router;
   router.AddFullEntry(destination_ip_address, &eth_router_2);
   router.AddFullEntry(source_ip_address, &eth_router_1);
 
-  IPv4 ip_router(router, set_router);
+  ARP arp_router(router_mac_address, router_ip_address);
+  IPv4 ip_router(arp_router, router, set_router);
   printf("Set up router\n");
   fflush(stdout);
+
+  // DUMMY, remove
+  vector<uint8_t> data;
 
   printf("\n[SIM] begin 3 way handshake\n");
   fflush(stdout);
@@ -152,7 +161,6 @@ void run_single_core_simulation() {
   bool sender_established = false;
   bool receiver_established = false;
 
-  vector<uint8_t> data;
   while (!sender_established || !receiver_established) {
 
     if (!sender_established) {

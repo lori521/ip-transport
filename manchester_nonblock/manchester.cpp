@@ -6,3 +6,6 @@ bool Manchester::Read(std::vector<uint8_t> &payload) {
 bool Manchester::Send(std::vector<uint8_t> payload) {
   return this->tx.Send(payload);
 }
+bool Manchester::Peek(std::vector<uint8_t> &payload) {
+  return this->rx.Peek(payload);
+}

@@ -31,6 +31,7 @@ public:
   ManchesterRx(uint8_t rx_pin, uint64_t clock_period_us);
   ~ManchesterRx();
   bool Read(std::vector<uint8_t> &payload);
+  bool Peek(std::vector<uint8_t> &payload);
 };
 
 class ManchesterTx {
@@ -62,4 +63,5 @@ public:
 public:
   bool Read(std::vector<uint8_t> &payload);
   bool Send(std::vector<uint8_t> payload);
+  bool Peek(std::vector<uint8_t> &payload);
 };

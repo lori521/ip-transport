@@ -110,3 +110,10 @@ bool ManchesterRx::Read(std::vector<uint8_t> &payload) {
   }
   return false;
 }
+
+bool ManchesterRx::Peek(std::vector<uint8_t> &payload) {
+  uint initial_read_pos = this->read_pos;
+  bool result = this->Read(payload);
+  this->read_pos = initial_read_pos;
+  return result;
+}

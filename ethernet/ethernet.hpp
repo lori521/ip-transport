@@ -40,6 +40,8 @@ public:
   Ethernet(Manchester &m, const uint8_t *source_mac_address);
   bool Read(std::vector<uint8_t> &payload,
             uint8_t destination_mac[MAC_ADDRESS_LEN], EthernetType *eth_type);
+  bool Peek(std::vector<uint8_t> &payload,
+            uint8_t destination_mac[MAC_ADDRESS_LEN], EthernetType *eth_type);
   bool Send(std::vector<uint8_t> payload,
             uint8_t destination_mac[MAC_ADDRESS_LEN],
             EthernetType eth_type = EthernetType::IPv4);

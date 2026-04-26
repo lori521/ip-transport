@@ -1,5 +1,6 @@
 #pragma once
 
+#include "arp/arp.hpp"
 #include "routing/routing.hpp"
 #include <cstdint>
 #include <header/header.hpp>
@@ -43,6 +44,7 @@ struct ipv4_packet_batch_t {
 class IPv4 {
 private:
   IPv4Router &router;
+  ARP &arp;
   ipv4_settings_t settings;
   std::unordered_map<uint16_t, ipv4_packet_batch_t> packets;
 
@@ -57,21 +59,19 @@ private:
   bool GeneratePackets(std::vector<uint8_t> &payload, uint32_t destination,
                        ipv4_packet_batch_t &batch,
                        const ipv4_options_t &options);
+  bool HandleARP();
 
 public:
-  IPv4(IPv4Router &router, const ipv4_settings_t &settings)
-      : router(router), settings(settings) {}
+  IPv4(ARP &arp, IPv4Router &router, const ipv4_settings_t &settings)
+      : arp(arp), router(router), settings(settings) {}
 
-  bool SendIPPacket(vector<uint8_t> &payload, char *destination,
-                    uint8_t *destination_mac); // no arp for now
-  bool SendIPPacket(vector<uint8_t> &payload, uint32_t destination,
-                    uint8_t *destination_mac);
+  bool SendIPPacket(vector<uint8_t> &payload, char *destination);
+  bool SendIPPacket(vector<uint8_t> &payload, uint32_t destination);
   bool ReadIPPacket(vector<uint8_t> &received_payload, char *source);
 
   // Support this for future use
   bool ReadIPPacket(vector<uint8_t> &received_payload,
                     ipv4_packet_header &header);
-
   uint32_t GetSourceAddress();
   void GetSourceAddress(char *address);
 };

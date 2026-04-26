@@ -202,28 +202,47 @@ bool IPv4::PopFinishedBatch(ipv4_packet_batch_t &finished) {
   return false;
 }
 
-bool IPv4::SendIPPacket(vector<uint8_t> &payload, char *destination,
-                        uint8_t *destination_mac) {
+bool IPv4::SendIPPacket(vector<uint8_t> &payload, char *destination) {
   uint32_t destination_addr;
   if (decode_ip_address(destination, destination_addr) == false) {
     printf("Could not parse destination addr\n");
     return false;
   }
 
-  return SendIPPacket(payload, destination_addr, destination_mac);
+  return SendIPPacket(payload, destination_addr);
 }
-bool IPv4::SendIPPacket(vector<uint8_t> &payload, uint32_t destination_addr,
-                        uint8_t *destination_mac) {
-  Ethernet *eth = router.where(destination_addr);
-  if (eth == NULL) {
+bool IPv4::SendIPPacket(vector<uint8_t> &payload, uint32_t destination_addr) {
+  this->HandleARP();
+
+  IPv4Resolve res = router.where(destination_addr);
+  if (res.found == false) {
     printf("Throwed packet. It doesn't match any entry in router\n");
     return false;
   }
+
+  Ethernet *eth = res.eth;
 
   ipv4_packet_batch_t batch;
   if (this->GeneratePackets(payload, destination_addr, batch) == false) {
     printf("Could not generate IP packets\n");
     return false;
+  }
+
+  uint8_t destination_mac[6];
+  if (!arp.GetMac(res.host_ip, destination_mac)) {
+
+    uint8_t broadcast[6] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
+    if (!eth->Send(arp.GenerateRequestPacket(res.host_ip), broadcast,
+                   EthernetType::ARP)) {
+      printf("Could not send ARP Request\n");
+      return false;
+    }
+    for (ipv4_packet_t pkt : batch.ipv4_packets) {
+      vector<uint8_t> ip_payload = pkt.dump_network_packet();
+      arp.QueuePacket(res.host_ip, ip_payload);
+    }
+    printf("I do not have MAC address, sent ARP, queued packet\n");
+    return true;
   }
 
   for (ipv4_packet_t pkt : batch.ipv4_packets) {
@@ -242,28 +261,77 @@ bool IPv4::RedirectIPPacket(ipv4_packet_t packet) {
   }
 
   packet.header.redirect();
-  Ethernet *eth = router.where(packet.header.destination_ip_address);
-  if (eth == NULL) {
+  IPv4Resolve res = router.where(packet.header.destination_ip_address);
+  if (res.found == false) {
     printf("Throwed packet. It doesn't match any entry in router\n");
     return false;
   }
+  Ethernet *eth = res.eth;
 
   vector<uint8_t> ip_payload = packet.dump_network_packet();
-  uint8_t broadcast_mac[MAC_ADDRESS_LEN] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
-  if (!eth->Send(ip_payload, broadcast_mac)) {
+  uint8_t destination_mac[6];
+  if (!arp.GetMac(res.host_ip, destination_mac)) {
+
+    uint8_t broadcast[6] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
+    if (!eth->Send(arp.GenerateRequestPacket(res.host_ip), broadcast,
+                   EthernetType::ARP)) {
+      printf("Could not send ARP Request\n");
+      return false;
+    }
+    arp.QueuePacket(res.host_ip, ip_payload);
+    printf("I do not have MAC address, sent ARP, queued packet\n");
+    return true;
+  }
+
+  if (!eth->Send(ip_payload, destination_mac)) {
     return false;
   }
 
   return true;
 }
-
-// Reads first whole IP packet
-bool IPv4::ReadIPPacket(vector<uint8_t> &payload, ipv4_packet_header &header) {
+bool IPv4::HandleARP() {
   vector<uint8_t> eth_payload;
 
   vector<Ethernet *> eths = this->router.fetchAll();
   for (Ethernet *eth : eths) {
-    if (eth->Read(eth_payload, NULL, NULL)) {
+    EthernetType eth_type;
+    while (eth->Peek(eth_payload, NULL, &eth_type) &&
+           eth_type == EthernetType::ARP) {
+      eth->Read(eth_payload, NULL, &eth_type);
+      // This is an ARP packet, it will be ignored by the IP layer
+      uint8_t origin_mac[6];
+      uint32_t origin_ip;
+      if (!arp.UpdateEntry(eth_payload)) {
+        printf("Could not process ARP\n");
+        return false;
+      }
+
+      bool is_request = arp.ProcessRequest(eth_payload, origin_mac, origin_ip);
+      if (is_request) {
+        if (!eth->Send(arp.CraftResponse(eth_payload), origin_mac,
+                       EthernetType::ARP)) {
+          printf("Could not send ARP Response\n");
+        }
+      }
+
+      for (auto &queued_packet : arp.DequeueAllPacketsOnIP(origin_ip)) {
+        if (!eth->Send(queued_packet, origin_mac)) {
+          printf("Could not send queued packet\n");
+        }
+      }
+    }
+  }
+  return true;
+}
+// Reads first whole IP packet
+bool IPv4::ReadIPPacket(vector<uint8_t> &payload, ipv4_packet_header &header) {
+  this->HandleARP();
+  vector<uint8_t> eth_payload;
+
+  vector<Ethernet *> eths = this->router.fetchAll();
+  for (Ethernet *eth : eths) {
+    EthernetType eth_type;
+    if (eth->Read(eth_payload, NULL, &eth_type)) {
       ipv4_packet_t packet;
       packet.read_raw(eth_payload);
       if (packet.header.destination_ip_address !=
