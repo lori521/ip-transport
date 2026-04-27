@@ -28,7 +28,10 @@ tcp_header::tcp_header() {
 
 // function to generate a random sequence number
 uint32_t generate_random_sequence_number() {
-    return (uint32_t)random();
+    random_device rd;
+    mt19937 gen(rd());
+    uniform_int_distribution<> dis(1, 100);
+    return dis(gen);
 }
 
 // constructor for tcp header with parameters

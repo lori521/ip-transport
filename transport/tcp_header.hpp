@@ -34,6 +34,12 @@ using namespace std;
 // OPTIONS_LENGTH -> size(Options) == (DOffset-5)*32
 // PAYLOAD_LENGTH -> variable
 
+// default maximum segment size for TCP as 1460 bytes
+#define MSS 1460
+
+// ring buffer size for tcp
+#define TCP_BUFFER_SIZE 4096
+
 // enums for state machine
 enum state {
     CLOSED,
@@ -48,6 +54,51 @@ enum state {
     CLOSE_WAIT,
     LAST_ACK
 };
+
+// send sequence variables
+struct snd {
+    // send unacknowledged
+    uint32_t una;
+    // send next
+    uint32_t nxt;
+    // send window
+    uint16_t wnd;
+    // send urgent pointer
+    uint32_t up;
+    // segment sequence number used for last window update
+    uint32_t wl1;
+    // segment acknowledgment number used for last window update
+    uint32_t wl2;
+    // initial send sequence number
+    uint32_t iss;
+};
+
+// receive sequence variables
+struct rcv {
+    // receive next
+    uint32_t nxt;
+    // receive window
+    uint16_t wnd;
+    // receive urgent pointer
+    uint32_t up;
+    // initial receive sequence number
+    uint32_t irs;
+};
+
+// current segment variables
+struct seg {
+    // segment sequence number
+    uint32_t seq;
+    // segment acknowledgment number
+    uint32_t ack;
+    // segment length
+    uint32_t len;
+    // segment window
+    uint16_t wnd;
+    // segment urgent pointer
+    uint32_t up;
+};
+
 
 // IPv4 pseudo-header -> 96 bits(12 bytes)
 // protection against misrouted segments
@@ -127,7 +178,22 @@ private:
     /* data */
     IPv4 &ipv4_layer;
     state current_state;
-    uint32_t saved_seq_num;
+
+    // transmit/receive buffer
+    uint8_t tx_buffer[TCP_BUFFER_SIZE] __attribute__((aligned(4)));
+    uint8_t rx_buffer[TCP_BUFFER_SIZE] __attribute__((aligned(4)));
+
+    // pointer for send packet which has not received an ack
+    uint32_t tx_head = 0;
+    // pointer to empty space left in tx_buffer
+    uint32_t tx_tail = 0;
+
+
+    // transmission control block (TCB)
+    snd snd_vars;
+    rcv rcv_vars;
+    seg seg_vars;
+
 public:
     tcp_layer(IPv4 &new_ipv4_layer);
     ~tcp_layer() {}
@@ -145,6 +211,11 @@ public:
     // 4 way handshake to finish onnection
     bool finish_connection_receiver(char *dest_ip, uint16_t dest_port, uint16_t src_port);
     bool finish_connection_sender(char* dest_ip, uint16_t dest_port, uint16_t src_port);
+
+    // stock data in buffer
+    bool write_data_in_buffer(uint8_t* payload, uint16_t payload_length);
+    // send data 
+
 };
 
 uint32_t generate_random_sequence_number();
