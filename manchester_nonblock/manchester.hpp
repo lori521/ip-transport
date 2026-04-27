@@ -55,10 +55,12 @@ public:
 class Manchester {
   ManchesterRx rx;
   ManchesterTx tx;
+  bool debug;
 
 public:
-  Manchester(uint8_t rx_pin, uint8_t tx_pin, uint64_t clock_period)
-      : rx(rx_pin, clock_period), tx(tx_pin, clock_period) {}
+  Manchester(uint8_t rx_pin, uint8_t tx_pin, uint64_t clock_period,
+             bool debug = false)
+      : rx(rx_pin, clock_period), tx(tx_pin, clock_period), debug(debug) {}
 
 public:
   bool Read(std::vector<uint8_t> &payload);

@@ -18,8 +18,8 @@ using namespace std;
 #define FCS_LEN 4
 
 enum class EthernetType : uint16_t {
-  IPv4 = 0x0800,
-  ARP = 0x806,
+  IPv4 = 0x0008,
+  ARP = 0x0608,
 };
 class Ethernet {
 private:

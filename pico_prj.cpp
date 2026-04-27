@@ -115,7 +115,7 @@ void receiver(Manchester &manchester) {
 
 void run_single_core_simulation() {
   // sender init
-  Manchester manchester_sender(RX1_PIN, TX1_PIN, CLOCK_PERIOD_US);
+  Manchester manchester_sender(RX1_PIN, TX1_PIN, CLOCK_PERIOD_US, true);
   Ethernet eth_send(manchester_sender, source_mac_address);
   ipv4_settings_t set_send(source_ip_address, TCP);
   IPv4Router router_send(router_ip_address, &eth_send);
@@ -126,7 +126,7 @@ void run_single_core_simulation() {
   fflush(stdout);
 
   // recv init
-  Manchester manchester_receiver(RX2_PIN, TX2_PIN, CLOCK_PERIOD_US);
+  Manchester manchester_receiver(RX2_PIN, TX2_PIN, CLOCK_PERIOD_US, true);
   Ethernet eth_recv(manchester_receiver, destination_mac_address);
   ipv4_settings_t set_recv(destination_ip_address, TCP);
   IPv4Router router_recv(router_ip_address, &eth_recv);

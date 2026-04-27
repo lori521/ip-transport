@@ -5,12 +5,12 @@
 
 // Helpers
 void push_uint16_n(std::vector<uint8_t> &data, uint16_t payload) {
-  data.push_back(payload & 0b11111111);
   data.push_back(payload >> 8);
+  data.push_back(payload & 0b11111111);
 }
 
 uint16_t read_uint16_n(std::vector<uint8_t> &data, size_t idx) {
-  uint16_t word = (((uint16_t)data[idx + 1]) << 8) | ((uint16_t)data[idx]);
+  uint16_t word = (((uint16_t)data[idx]) << 8) | ((uint16_t)data[idx + 1]);
   return word;
 }
 
