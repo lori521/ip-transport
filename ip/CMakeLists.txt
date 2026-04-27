@@ -8,6 +8,8 @@ add_library(ip
         ip.cpp
         utils/network_helpers.cpp
         header/header.cpp
+        routing/routing.cpp
+        arp/arp.cpp
 )
 
 # Add include directories

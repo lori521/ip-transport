@@ -9,18 +9,22 @@
 ManchesterRx::ManchesterRx(uint8_t rx_pin, uint64_t clock_period) {
   this->rx_pin = rx_pin;
 
-  PIO pio = pio0; // try this pio block
-  if (!pio_can_add_program(pio, &manchester_rx_program)) {
+  pio = pio0; // try this pio block
+  sm = pio_claim_unused_sm(pio, false);
+  if (sm < 0 || !pio_can_add_program(pio, &manchester_rx_program)) {
+    if (sm >= 0) {
+      pio_sm_unclaim(pio, sm);
+    }
     pio = pio1;
-    if (!pio_can_add_program(pio, &manchester_rx_program)) { // try the other
-      printf("Cannot instantiate PIO RX");
+    sm = pio_claim_unused_sm(pio, false);
+    if (sm < 0 || !pio_can_add_program(pio, &manchester_rx_program)) {
+      printf("Cannot instantiate PIO RX\n");
       return;
     }
   }
+  printf("RX-pin%d: pio=%d sm=%d\n", rx_pin, pio == pio0 ? 0 : 1, sm);
 
   uint offset_rx = pio_add_program(pio, &manchester_rx_program);
-
-  uint sm = pio_claim_unused_sm(pio, true);
 
   float div =
       clock_get_hz(clk_sys) /
@@ -36,14 +40,21 @@ ManchesterRx::ManchesterRx(uint8_t rx_pin, uint64_t clock_period) {
   channel_config_set_write_increment(&c, true);
   channel_config_set_dreq(&c, pio_get_dreq(pio, sm, false));
 
-  channel_config_set_ring(&c, true,
-                          10); // make this a ring buffer 2^10 = RING_BUFFER_SIZE
+  channel_config_set_ring(
+      &c, true,
+      10); // make this a ring buffer 2^10 = RING_BUFFER_SIZE
   dma_channel_configure(chan, &c, this->buffer, (uint8_t *)&pio->rxf[sm] + 3,
                         -1, true);
 
   this->dma_chan = chan;
 
   gpio_pull_down(rx_pin);
+}
+ManchesterRx::~ManchesterRx() {
+  pio_sm_set_enabled(pio, sm, false);
+  pio_sm_unclaim(pio, sm);
+  dma_channel_abort(dma_chan);
+  dma_channel_unclaim(dma_chan);
 }
 
 uint ManchesterRx::buffer_size() {
@@ -60,23 +71,28 @@ bool ManchesterRx::Read(std::vector<uint8_t> &payload) {
 
   uint initial_read_pos = read_pos;
 
+  uint8_t last_sample = PREAMBLE_BYTE;
   while (buffer_size() > 0) {
     uint8_t sample = this->buffer[read_pos];
-    if (sample == SFD) {
+    if (sample == SFD && last_sample == DEL) {
       // printf("Found sfd\n");
+      last_sample = SFD;
+
       read_pos = (read_pos + 1) % RX_BUFFER_SIZE;
 
       uint bytes_read = 0;
       while (buffer_size() > 0 && bytes_read++ < RX_BUFFER_SIZE) {
         sample = this->buffer[read_pos];
-        if (sample == EFD) {
+        if (sample == EFD && last_sample == DEL) {
           // printf("Ended\n");
+          payload.pop_back();
           read_pos = (read_pos + 1) % RX_BUFFER_SIZE;
           return true;
         }
 
         payload.push_back(sample);
         read_pos = (read_pos + 1) % RX_BUFFER_SIZE;
+        last_sample = sample;
       }
 
       if (bytes_read >= RX_BUFFER_SIZE) {
@@ -90,6 +106,14 @@ bool ManchesterRx::Read(std::vector<uint8_t> &payload) {
     } else {
       read_pos = (read_pos + 1) % RX_BUFFER_SIZE;
     }
+    last_sample = sample;
   }
   return false;
+}
+
+bool ManchesterRx::Peek(std::vector<uint8_t> &payload) {
+  uint initial_read_pos = this->read_pos;
+  bool result = this->Read(payload);
+  this->read_pos = initial_read_pos;
+  return result;
 }

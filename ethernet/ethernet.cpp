@@ -76,12 +76,13 @@ vector<uint8_t> Ethernet::eth_decap(uint8_t *frame, uint32_t frame_data_length,
   }
 
   // broadcast support
-  uint8_t broadcast_mac_cmp[MAC_ADDRESS_LEN] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
-    
-  if (memcmp(frame, source_mac, MAC_ADDRESS_LEN) != 0 && 
-        memcmp(frame, broadcast_mac_cmp, MAC_ADDRESS_LEN) != 0) {
-      printf("Destination MAC error!\n");
-      return vector<uint8_t>();
+  uint8_t broadcast_mac_cmp[MAC_ADDRESS_LEN] = {0xFF, 0xFF, 0xFF,
+                                                0xFF, 0xFF, 0xFF};
+
+  if (memcmp(frame, source_mac, MAC_ADDRESS_LEN) != 0 &&
+      memcmp(frame, broadcast_mac_cmp, MAC_ADDRESS_LEN) != 0) {
+    printf("Destination MAC error!\n");
+    return vector<uint8_t>();
   }
 
   if (destination_mac != NULL) {
@@ -96,6 +97,22 @@ bool Ethernet::Read(std::vector<uint8_t> &payload,
                     EthernetType *eth_type) {
   vector<uint8_t> raw;
   if (!this->m.Read(raw)) {
+    return false;
+  }
+
+  payload = this->eth_decap(raw.data(), raw.size(), eth_type, destination_mac);
+  if (payload.size() == 0) {
+    return false;
+  }
+
+  return true;
+}
+
+bool Ethernet::Peek(std::vector<uint8_t> &payload,
+                    uint8_t destination_mac[MAC_ADDRESS_LEN],
+                    EthernetType *eth_type) {
+  vector<uint8_t> raw;
+  if (!this->m.Peek(raw)) {
     return false;
   }
 

@@ -6,18 +6,22 @@
 ManchesterTx::ManchesterTx(uint8_t tx_pin, uint64_t clock_period) {
   this->tx_pin = tx_pin;
 
-  this->pio = pio0; // try this pio block
-  if (!pio_can_add_program(this->pio, &manchester_tx_program)) {
-    this->pio = pio1;
-    if (!pio_can_add_program(pio, &manchester_tx_program)) { // try the other
-      printf("Cannot instantiate PIO RX");
+  pio = pio0; // try this pio block
+  sm = pio_claim_unused_sm(pio, false);
+  if (sm < 0 || !pio_can_add_program(pio, &manchester_tx_program)) {
+    if (sm >= 0) {
+      pio_sm_unclaim(pio, sm);
+    }
+    pio = pio1;
+    sm = pio_claim_unused_sm(pio, false);
+    if (sm < 0 || !pio_can_add_program(pio, &manchester_tx_program)) {
+      printf("Cannot instantiate PIO TX\n");
       return;
     }
   }
+  printf("RX-pin%d: pio=%d sm=%d\n", tx_pin, pio == pio0 ? 0 : 1, sm);
 
   uint offset_rx = pio_add_program(pio, &manchester_tx_program);
-
-  sm = pio_claim_unused_sm(pio, true);
 
   float div =
       clock_get_hz(clk_sys) /
@@ -29,10 +33,12 @@ ManchesterTx::ManchesterTx(uint8_t tx_pin, uint64_t clock_period) {
 }
 bool ManchesterTx::Send(std::vector<uint8_t> payload) {
   std::vector<uint8_t> start_frame(preamble, preamble + PREAMBLE_SIZE);
+  start_frame.push_back(DEL);
   start_frame.push_back(SFD);
 
   payload.insert(payload.begin(), start_frame.begin(), start_frame.end());
 
+  payload.push_back(DEL);
   payload.push_back(EFD);
 
   dma_channel_config c = dma_channel_get_default_config(dma_chan);
@@ -48,4 +54,10 @@ bool ManchesterTx::Send(std::vector<uint8_t> payload) {
   dma_channel_wait_for_finish_blocking(dma_chan);
 
   return true;
+}
+ManchesterTx::~ManchesterTx() {
+  pio_sm_set_enabled(pio, sm, false);
+  pio_sm_unclaim(pio, sm);
+  dma_channel_abort(dma_chan);
+  dma_channel_unclaim(dma_chan);
 }

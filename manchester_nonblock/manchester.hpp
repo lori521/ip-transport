@@ -6,8 +6,8 @@
 #include <queue>
 #include <vector>
 
-#define SFD 0x7E
-#define EFD 0x81
+#define SFD 0xD5
+#define EFD 0xB7
 #define DEL 0xFC
 
 #define PREAMBLE_BYTE 0xAA
@@ -18,6 +18,8 @@ enum class ManchesterRxState { IDLE, SYNC_CLK, WAIT_SFD, RECEIVING };
 #define RX_BUFFER_SIZE 1024 // must be 2^n
 class ManchesterRx {
   uint8_t rx_pin;
+  PIO pio;
+  int sm;
   int dma_chan;
 
   uint8_t buffer[RX_BUFFER_SIZE] __attribute__((aligned(RX_BUFFER_SIZE)));
@@ -27,7 +29,9 @@ class ManchesterRx {
 
 public:
   ManchesterRx(uint8_t rx_pin, uint64_t clock_period_us);
+  ~ManchesterRx();
   bool Read(std::vector<uint8_t> &payload);
+  bool Peek(std::vector<uint8_t> &payload);
 };
 
 class ManchesterTx {
@@ -35,7 +39,7 @@ class ManchesterTx {
   uint64_t clock_period;
 
   PIO pio;
-  uint sm;
+  int sm;
   int dma_chan;
 
   const uint8_t preamble[PREAMBLE_SIZE] = {PREAMBLE_BYTE, PREAMBLE_BYTE,
@@ -44,6 +48,7 @@ class ManchesterTx {
 
 public:
   ManchesterTx(uint8_t tx_pin, uint64_t clock_period);
+  ~ManchesterTx();
   bool Send(std::vector<uint8_t> payload);
 };
 
@@ -58,4 +63,5 @@ public:
 public:
   bool Read(std::vector<uint8_t> &payload);
   bool Send(std::vector<uint8_t> payload);
+  bool Peek(std::vector<uint8_t> &payload);
 };

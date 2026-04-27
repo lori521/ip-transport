@@ -196,6 +196,10 @@ uint16_t ipv4_packet_header::calculate_checksum() {
   this->header_check_sum = preserve_checksum;
   return (~sum) & 0b1111111111111111;
 }
+void ipv4_packet_header::redirect() {
+  this->ttl--;
+  this->header_check_sum = this->calculate_checksum();
+}
 
 void ipv4_packet_header::debug() {
   printf("Header: \n");
