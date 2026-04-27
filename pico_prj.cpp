@@ -152,7 +152,6 @@ void run_single_core_simulation() {
   printf("Set up router\n");
   fflush(stdout);
 
-  // DUMMY, remove
   vector<uint8_t> data;
 
   printf("\n[SIM] begin 3 way handshake\n");
@@ -183,35 +182,37 @@ void run_single_core_simulation() {
 
   // test cwnd
   vector<uint8_t> sending_data(5000, 'A');
-  uint32_t sending_data_len = sending_data.size();  
+  uint32_t sending_data_len = sending_data.size();
 
   tcp_send.send_segment(sending_data.data(), sending_data_len);
 
   uint32_t total_bytes_received = 0;
 
   while (total_bytes_received < sending_data_len) {
-      tcp_send.check_retransmission();
-      
-      tcp_send.send_segment(nullptr, 0);
+    tcp_send.check_retransmission();
 
-      for (int i = 0; i < 10; i++) {
-          uint32_t bytes_got = tcp_recv.receive_segment();
-          if (bytes_got > 0) {
-            total_bytes_received += bytes_got;
-            printf("[SIM] receiver got %d bytes!\n", bytes_got);
-          }
-          tcp_send.receive_segment();
-          
-          sleep_ms(20);
-        }
+    tcp_send.send_segment(nullptr, 0);
+
+    ip_router.ReadIPPacket(data, NULL);
+
+    for (int i = 0; i < 10; i++) {
+      uint32_t bytes_got = tcp_recv.receive_segment();
+      if (bytes_got > 0) {
+        total_bytes_received += bytes_got;
+        printf("[SIM] receiver got %d bytes!\n", bytes_got);
+      }
+      tcp_send.receive_segment();
+
+      sleep_ms(20);
+    }
   }
 
-  uint8_t app_buffer[5000]; 
+  uint8_t app_buffer[5000];
   uint32_t read_result = tcp_recv.read_data(app_buffer, sending_data_len);
-  
+
   if (read_result > 0) {
-      app_buffer[read_result] = '\0';
-      printf("[SIM] read %u bytes from buffer\n", read_result);
+    app_buffer[read_result] = '\0';
+    printf("[SIM] read %u bytes from buffer\n", read_result);
   }
 
   fflush(stdout);
