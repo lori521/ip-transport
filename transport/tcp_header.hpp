@@ -34,11 +34,11 @@ using namespace std;
 // OPTIONS_LENGTH -> size(Options) == (DOffset-5)*32
 // PAYLOAD_LENGTH -> variable
 
-// default maximum segment size for TCP as 1460 bytes
-#define MSS 1460
+// default maximum segment size for TCP as 512 bytes
+#define MSS 512
 
 // ring buffer size for tcp
-#define TCP_BUFFER_SIZE 4096
+#define TCP_BUFFER_SIZE 8192
 
 // enums for state machine
 enum state {
@@ -183,16 +183,38 @@ private:
     uint8_t tx_buffer[TCP_BUFFER_SIZE] __attribute__((aligned(4)));
     uint8_t rx_buffer[TCP_BUFFER_SIZE] __attribute__((aligned(4)));
 
-    // pointer for send packet which has not received an ack
+    // position inside circular tx_buffer pointers
     uint32_t tx_head = 0;
-    // pointer to empty space left in tx_buffer
     uint32_t tx_tail = 0;
 
+    // position inside circular rx_buffer pointers
+    uint32_t rx_head = 0;
+    uint32_t rx_tail = 0;
+
+    // sender and receiver addresses
+    uint32_t dest_ip;
+    uint16_t dest_port;
+    uint32_t src_ip;
+    uint16_t src_port;
 
     // transmission control block (TCB)
     snd snd_vars;
     rcv rcv_vars;
     seg seg_vars;
+
+    // retransmission time
+    uint64_t rto_first_unack_packet;
+    uint32_t rto;
+
+    // added cwnd for congestion control
+    uint32_t cwnd;
+
+    // start stop logic 
+    uint32_t max_ssthresh;
+
+    // fields to simulate drop
+    bool simulate_drop = false;
+    int drop_counter = 0;
 
 public:
     tcp_layer(IPv4 &new_ipv4_layer);
@@ -212,10 +234,23 @@ public:
     bool finish_connection_receiver(char *dest_ip, uint16_t dest_port, uint16_t src_port);
     bool finish_connection_sender(char* dest_ip, uint16_t dest_port, uint16_t src_port);
 
-    // stock data in buffer
-    bool write_data_in_buffer(uint8_t* payload, uint16_t payload_length);
-    // send data 
+    // helper functions to write and extract data from rx_buffer/tx_buffer
+    bool write_data_in_tx_buffer(uint8_t* payload, uint16_t payload_length);
+    void extract_data_from_tx_buffer(uint8_t* current_chunk_data, uint32_t read_idx, uint32_t current_chunk_length);
+    bool write_data_in_rx_buffer(uint8_t* payload, uint16_t payload_length);
+    void extract_data_from_rx_buffer(uint8_t* current_chunk_data, uint32_t read_idx, uint32_t current_chunk_length);
 
+    // send data segment
+    uint32_t send_segment(uint8_t* payload, uint32_t payload_length); 
+    // receive data segment
+    uint32_t receive_segment();
+
+    // helper
+    uint32_t read_data(uint8_t* destination, uint32_t length_to_read);
+    void set_simulate_drop(bool value);
+
+    // retransmission logic
+    void check_retransmission();
 };
 
 uint32_t generate_random_sequence_number();
