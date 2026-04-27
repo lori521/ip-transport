@@ -83,11 +83,14 @@ add_subdirectory(ethernet)
 
 add_subdirectory(ip)
 
+add_subdirectory(transport)
+
 add_executable(pico_prj pico_prj.cpp
         ip/ip.cpp
         transport/tcp_packet.cpp
         transport/tcp_packet_io.cpp
-        transport/tcp_state_machine.cpp)
+        transport/tcp_state_machine.cpp
+        transport/tcp_wrapper.cpp)
 
 pico_set_program_name(pico_prj "pico_prj")
 pico_set_program_version(pico_prj "0.1")

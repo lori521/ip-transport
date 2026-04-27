@@ -1,6 +1,6 @@
 #include "tcp_header.hpp"
 
-// TODO: implement tcp_window_size dynamic algorithm -> later
+// TODO: implement tcp_window_size dynamic algorithm -> later 
 // tcp header -> tcp header + data -> pseudo-header + tcp header + data -> checksum
 
 /* --------------------- TCP_PSEUDOHEADER ---------------------------- */
@@ -234,6 +234,15 @@ void tcp_packet::free_package() {
 tcp_layer::tcp_layer(IPv4 &new_ipv4_layer) : ipv4_layer(new_ipv4_layer) {
     // beggining state
     this->current_state = CLOSED;
+
+    // initialise rto
+    this->rto_first_unack_packet = 0;
+    this->rto = 1000000;
+
+    // initialise cwnd with mss
+    this->cwnd = 3 * MSS;
+    // initialise max_ssthresh
+    this->max_ssthresh = 0xFFFFFFFF;
 }
 
 // function to get current state 
@@ -244,4 +253,8 @@ state tcp_layer::get_state() {
 // function to set/change current state
 void tcp_layer::set_state(state new_state) {
     this->current_state = new_state;
+}
+
+void tcp_layer::set_simulate_drop(bool value) {
+    this->simulate_drop = value;
 }

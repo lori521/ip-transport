@@ -41,6 +41,12 @@ bool tcp_layer::establish_connection_receiver(char* dest_ip, uint16_t dest_port,
         uint32_t receiver_ip_addr = ipv4_layer.GetSourceAddress();
         uint32_t sender_ip_addr = inet_addr(received_sender_ip);
 
+        // save ip and port
+        this->src_ip = receiver_ip_addr;
+        this->dest_ip = sender_ip_addr;
+        this->src_port = src_port;
+        this->dest_port = dest_port;
+
         // get pseudoheader
         tcp_pseudoheader syn_pshdr = tcp_pseudoheader(sender_ip_addr, receiver_ip_addr, received_payload.size());
 
@@ -195,6 +201,12 @@ bool tcp_layer::establish_connection_sender(char* dest_ip, uint16_t dest_port, u
     switch (this->current_state)
     {
     case CLOSED: {
+        // remember ip and port
+        this->src_ip = sender_ip_addr;
+        this->dest_ip = receiver_ip_addr;
+        this->src_port = src_port;
+        this->dest_port = dest_port;
+
         // generate new sequence number for syn packet
         // initialise send tcb
         this->snd_vars.iss = generate_random_sequence_number();
