@@ -11,9 +11,6 @@
 
 #include "tcp_header.hpp"
 
-// MAC hardcoded -- NEED ARP ASAP
-uint8_t hardcoded_mac_2[6] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
-
 // send mss segmend
 // send data
 // -> breal into pieces <= MSS
@@ -81,7 +78,7 @@ void tcp_layer::check_retransmission() {
     vector<uint8_t> send_payload(raw_buffer, raw_buffer + final_package_length);
     char dest_ip_str[16];
     encode_ip_address(this->dest_ip, dest_ip_str);
-    ipv4_layer.SendIPPacket(send_payload, dest_ip_str, hardcoded_mac_2);
+    ipv4_layer.SendIPPacket(send_payload, dest_ip_str);
 
     free(raw_buffer);
     segment_packet.free_package();
@@ -218,7 +215,7 @@ uint32_t tcp_layer::send_segment(uint8_t* payload, uint32_t payload_length) {
         vector<uint8_t> send_payload(raw_buffer, raw_buffer + final_package_length);
         char dest_ip_str[16];
         encode_ip_address(this->dest_ip, dest_ip_str);
-        ipv4_layer.SendIPPacket(send_payload, dest_ip_str, hardcoded_mac_2);
+        ipv4_layer.SendIPPacket(send_payload, dest_ip_str);
 
         if (number_of_bytes_in_flight == 0) {
             printf("[TIMER] started\n");
@@ -405,7 +402,7 @@ uint32_t tcp_layer::receive_segment() {
         vector<uint8_t> send_payload(raw_buffer, raw_buffer + package_length);
         char dest_ip_str[16];
         encode_ip_address(this->dest_ip, dest_ip_str);
-        ipv4_layer.SendIPPacket(send_payload, dest_ip_str, hardcoded_mac_2);
+        ipv4_layer.SendIPPacket(send_payload, dest_ip_str);
 
         free(raw_buffer);
         ack_packet.free_package();
