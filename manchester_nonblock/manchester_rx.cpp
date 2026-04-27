@@ -37,7 +37,7 @@ ManchesterRx::ManchesterRx(uint8_t rx_pin, uint64_t clock_period) {
   channel_config_set_dreq(&c, pio_get_dreq(pio, sm, false));
 
   channel_config_set_ring(&c, true,
-                          7); // make this a ring buffer 2^7 = RING_BUFFER_SIZE
+                          10); // make this a ring buffer 2^10 = RING_BUFFER_SIZE
   dma_channel_configure(chan, &c, this->buffer, (uint8_t *)&pio->rxf[sm] + 3,
                         -1, true);
 
@@ -63,14 +63,14 @@ bool ManchesterRx::Read(std::vector<uint8_t> &payload) {
   while (buffer_size() > 0) {
     uint8_t sample = this->buffer[read_pos];
     if (sample == SFD) {
-      printf("Found sfd\n");
+      // printf("Found sfd\n");
       read_pos = (read_pos + 1) % RX_BUFFER_SIZE;
 
       uint bytes_read = 0;
       while (buffer_size() > 0 && bytes_read++ < RX_BUFFER_SIZE) {
         sample = this->buffer[read_pos];
         if (sample == EFD) {
-          printf("Ended\n");
+          // printf("Ended\n");
           read_pos = (read_pos + 1) % RX_BUFFER_SIZE;
           return true;
         }

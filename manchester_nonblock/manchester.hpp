@@ -15,7 +15,7 @@
 const uint PREAMBLE_SIZE = 6;
 enum class ManchesterRxState { IDLE, SYNC_CLK, WAIT_SFD, RECEIVING };
 
-#define RX_BUFFER_SIZE 128 // must be 2^n
+#define RX_BUFFER_SIZE 1024 // must be 2^n
 class ManchesterRx {
   uint8_t rx_pin;
   int dma_chan;
