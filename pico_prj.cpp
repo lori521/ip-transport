@@ -39,7 +39,7 @@ vector<uint8_t> sending_data = {'H', 'e', 'l', 'l', 'o', ' ',
 uint32_t sending_data_len = sending_data.size();
 
 // IP defines
-ipv4_settings_t ip_settings("192.168.100.1", TCP);
+ipv4_settings_t ip_settings((char *)"192.168.100.1", TCP);
 char destination_ip_address[15] = "192.168.100.2";
 
 using namespace std;
@@ -54,6 +54,9 @@ void sender(Manchester &manchester) {
 
   printf("[SENDER] wait 5 seconds before sending SYN...\n");
   sleep_ms(5000);
+
+  bool sender_established = false;
+  bool receiver_established = false;
 
   while(1) {
       printf("\n[SENDER] Begin connection establish...\n");
@@ -110,6 +113,7 @@ void run_single_core_simulation(Manchester &m_send, Manchester &m_recv) {
   ipv4_settings_t set_recv((char*)"192.168.100.2", TCP);
   IPv4 ip_recv(eth_recv, set_recv);
   tcp_layer tcp_recv(ip_recv);
+  tcp_recv.set_simulate_drop(true);
 
   printf("\n[SIM] begin 3 way handshake\n");
   fflush(stdout); 
@@ -127,6 +131,47 @@ void run_single_core_simulation(Manchester &m_send, Manchester &m_recv) {
       
       sleep_ms(5);
   }
+
+  printf("\n[SIM] begin data transmission\n");
+  fflush(stdout);
+
+  // test cwnd
+  vector<uint8_t> sending_data(5000, 'A');
+  uint32_t sending_data_len = sending_data.size();  
+
+  tcp_send.send_segment(sending_data.data(), sending_data_len);
+
+  uint32_t total_bytes_received = 0;
+
+  while (total_bytes_received < sending_data_len) {
+      tcp_send.check_retransmission();
+      
+      tcp_send.send_segment(nullptr, 0);
+
+      for (int i = 0; i < 10; i++) {
+          uint32_t bytes_got = tcp_recv.receive_segment();
+          if (bytes_got > 0) {
+            total_bytes_received += bytes_got;
+            printf("[SIM] receiver got %d bytes!\n", bytes_got);
+          }
+          tcp_send.receive_segment();
+          
+          sleep_ms(20);
+        }
+  }
+
+  uint8_t app_buffer[5000]; 
+  uint32_t read_result = tcp_recv.read_data(app_buffer, sending_data_len);
+  
+  if (read_result > 0) {
+      app_buffer[read_result] = '\0';
+      printf("[SIM] read %u bytes from buffer\n", read_result);
+  }
+
+  fflush(stdout);
+
+  printf("\n[SIM] data transmission complete! Moving to teardown...\n");
+  fflush(stdout);
 
   printf("\n[SIM] begin 4 way handshake\n");
   fflush(stdout);
