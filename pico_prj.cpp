@@ -103,7 +103,6 @@ void router() {
   vector<uint8_t> data;
   while (1) {
     ip_router.ReadIPPacket(data, NULL);
-    sleep_ms(5);
   }
 }
 void receiver() {
@@ -273,6 +272,11 @@ int main() {
   while (!stdio_usb_connected()) {
     sleep_ms(100);
   }
+
+  printf("clk_sys = %u Hz\n", clock_get_hz(clk_sys));
+  float div = clock_get_hz(clk_sys) / (1000000.0f / 104 * 12);
+  printf("PIO div = %f\n", div);
+  printf("Actual baud = %f Hz\n", clock_get_hz(clk_sys) / div);
 
   // Initialise the Wi-Fi chip
   // if (cyw43_arch_init()) {
