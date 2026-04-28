@@ -34,10 +34,11 @@ void tcp_layer::check_retransmission() {
 
     printf("[RTO] expired! retransmitting seq=%u\n", this->snd_vars.una);
 
-    // multipicative decrease for cwnd
-    this->cwnd = max(this->cwnd / 2, (uint32_t)MSS);
     // update for slow start
-    this->max_ssthresh = max((this->cwnd/2), (uint32_t)(2 * MSS));
+    uint32_t flight_size = this->snd_vars.nxt - this->snd_vars.una;
+    this->max_ssthresh = max((flight_size/2), (uint32_t)(2 * MSS));
+    // multipicative decrease for cwnd
+    this->cwnd = MSS;
     printf("[CWND] loss detected, cwnd=%u\n", this->cwnd);
 
     // if all sanity checks are passed then begin retransmission
@@ -229,8 +230,6 @@ uint32_t tcp_layer::send_segment(uint8_t* payload, uint32_t payload_length) {
         this->snd_vars.nxt += current_chunk_length;
         number_of_bytes_in_flight += current_chunk_length;
         bytes_read += current_chunk_length;
-
-        break;
     }
     return bytes_read;
 }
@@ -348,11 +347,11 @@ uint32_t tcp_layer::receive_segment() {
             this->tx_head += number_of_ack_bytes;
 
             // additive increase for cwnd
-            if (this->cwnd <= this->max_ssthresh) {
+            if (this->cwnd < this->max_ssthresh) {
                 printf("[SLOW START] cwnd value is: %d\n", this->cwnd);
                 this->cwnd += MSS;
             } else {
-                this->cwnd += (int)(this->cwnd / (0.5 * this->max_ssthresh));
+                this->cwnd += (MSS * MSS) / this->cwnd;
             }
             printf("[CWND] ACK received, cwnd=%u\n", this->cwnd);
 
@@ -412,12 +411,19 @@ uint32_t tcp_layer::receive_segment() {
     return received_bytes;
 }
 
+// helper to read data 
 uint32_t tcp_layer::read_data(uint8_t* destination, uint32_t length_to_read) {
     uint32_t available_data = this->rx_tail - this->rx_head;
     
-    uint32_t actual_read_len = (length_to_read < available_data) ? length_to_read : available_data;
+    uint32_t actual_read_len;
+    if (length_to_read < available_data) {
+        actual_read_len = length_to_read;
+    } else {
+        actual_read_len =  available_data;
+    }
 
-    if (actual_read_len == 0) return 0;
+    if (actual_read_len == 0) 
+        return 0;
 
     uint32_t read_idx = this->rx_head & (TCP_BUFFER_SIZE - 1);
 
