@@ -297,6 +297,8 @@ bool IPv4::HandleARP() {
     EthernetType eth_type;
     while (eth->Peek(eth_payload, NULL, &eth_type) &&
            eth_type == EthernetType::ARP) {
+      printf("Detected ARP packet\n");
+      fflush(stdout);
       eth->Read(eth_payload, NULL, &eth_type);
       // This is an ARP packet, it will be ignored by the IP layer
       uint8_t origin_mac[6];
@@ -336,6 +338,8 @@ bool IPv4::ReadIPPacket(vector<uint8_t> &payload, ipv4_packet_header &header) {
       packet.read_raw(eth_payload);
       if (packet.header.destination_ip_address !=
           this->settings.device_ip_address) {
+        printf("Packet not for me\n");
+        fflush(stdout);
         if (this->RedirectIPPacket(packet) == false) {
           printf("Could not redirect ip packet\n");
           continue;

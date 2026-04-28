@@ -50,15 +50,16 @@ char router_ip_address[15] = "192.168.100.1";
 
 using namespace std;
 
-void sender(Manchester &manchester) {
-  Ethernet ethernet(manchester, source_mac_address);
-
-  ipv4_settings_t sender_settings(source_ip_address, TCP);
-
-  IPv4Router router(destination_ip_address, &ethernet);
-  ARP arp(source_mac_address, source_ip_address);
-  IPv4 ip(arp, router, sender_settings);
-  tcp_layer tcp(ip);
+void sender() {
+  Manchester manchester_sender(RX1_PIN, TX1_PIN, CLOCK_PERIOD_US, true);
+  Ethernet eth_send(manchester_sender, source_mac_address);
+  ipv4_settings_t set_send(source_ip_address, TCP);
+  IPv4Router router_send(router_ip_address, &eth_send);
+  ARP arp_send(source_mac_address, source_ip_address);
+  IPv4 ip_send(arp_send, router_send, set_send);
+  tcp_layer tcp(ip_send);
+  printf("Set up sender\n");
+  fflush(stdout);
 
   printf("[SENDER] wait 5 seconds before sending SYN...\n");
   sleep_ms(5000);
@@ -82,16 +83,39 @@ void sender(Manchester &manchester) {
     sleep_ms(3000);
   }
 }
+void router() {
+  // router init
+  Manchester m1_router(ROUTER_RX_PIN_1, ROUTER_TX_PIN_1, CLOCK_PERIOD_US);
+  Manchester m2_router(ROUTER_RX_PIN_2, ROUTER_TX_PIN_2, CLOCK_PERIOD_US);
+  Ethernet eth_router_1(m1_router, router_mac_address);
+  Ethernet eth_router_2(m2_router, router_mac_address);
+  ipv4_settings_t set_router((char *)router_ip_address, TCP);
 
-void receiver(Manchester &manchester) {
-  Ethernet ethernet(manchester, destination_mac_address);
+  IPv4Router router;
+  router.AddFullEntry(destination_ip_address, &eth_router_2);
+  router.AddFullEntry(source_ip_address, &eth_router_1);
 
-  ipv4_settings_t receiver_settings(destination_ip_address, TCP);
+  ARP arp_router(router_mac_address, router_ip_address);
+  IPv4 ip_router(arp_router, router, set_router);
+  printf("Set up router\n");
+  fflush(stdout);
 
-  IPv4Router router(source_ip_address, &ethernet);
-  ARP arp(destination_mac_address, destination_ip_address);
-  IPv4 ip(arp, router, receiver_settings);
-  tcp_layer tcp(ip);
+  vector<uint8_t> data;
+  while (1) {
+    ip_router.ReadIPPacket(data, NULL);
+    sleep_ms(5);
+  }
+}
+void receiver() {
+  Manchester manchester_receiver(RX2_PIN, TX2_PIN, CLOCK_PERIOD_US, true);
+  Ethernet eth_recv(manchester_receiver, destination_mac_address);
+  ipv4_settings_t set_recv(destination_ip_address, TCP);
+  IPv4Router router_recv(router_ip_address, &eth_recv);
+  ARP arp_recv(destination_mac_address, destination_ip_address);
+  IPv4 ip_recv(arp_recv, router_recv, set_recv);
+  tcp_layer tcp(ip_recv);
+  printf("Set up receiver\n");
+  fflush(stdout);
 
   while (1) {
     printf("\n[RECEIVER] Begin connection establish...\n");
@@ -261,12 +285,14 @@ int main() {
 
   // Initialise Manchester
 
-  string type = "test";
+  string type = "router";
 
   if (type == "sender") {
-    // sender(global_manchester);
+    sender();
   } else if (type == "receiver") {
-    // receiver(global_manchester);
+    receiver();
+  } else if (type == "router") {
+    router();
   } else if (type == "test") {
 
     printf("[MAIN] simulation on only one pico...\n");
