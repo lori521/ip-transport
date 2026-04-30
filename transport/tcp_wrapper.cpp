@@ -411,10 +411,11 @@ uint32_t tcp_layer::receive_segment() {
     return received_bytes;
 }
 
-// helper to read data 
+// helper to read data without losing it
 uint32_t tcp_layer::read_data(uint8_t* destination, uint32_t length_to_read) {
     uint32_t available_data = this->rx_tail - this->rx_head;
     
+    // find actual length
     uint32_t actual_read_len;
     if (length_to_read < available_data) {
         actual_read_len = length_to_read;
@@ -425,6 +426,7 @@ uint32_t tcp_layer::read_data(uint8_t* destination, uint32_t length_to_read) {
     if (actual_read_len == 0) 
         return 0;
 
+    // find read index
     uint32_t read_idx = this->rx_head & (TCP_BUFFER_SIZE - 1);
 
     this->extract_data_from_rx_buffer(destination, read_idx, actual_read_len);
