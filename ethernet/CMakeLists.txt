@@ -16,6 +16,7 @@ target_include_directories(ethernet PUBLIC
 # Link against pico standard library
 target_link_libraries(ethernet
     pico_stdlib
+    manchester_nonblock
 )
 
 # Enable USB output, disable UART output

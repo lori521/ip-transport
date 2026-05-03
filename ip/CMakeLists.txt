@@ -8,6 +8,8 @@ add_library(ip
         ip.cpp
         utils/network_helpers.cpp
         header/header.cpp
+        routing/routing.cpp
+        arp/arp.cpp
 )
 
 # Add include directories
@@ -19,7 +21,6 @@ target_include_directories(ip PUBLIC
 target_link_libraries(ip
         pico_stdlib
         ethernet
-        manchester_codec
 )
 
 # Enable USB output, disable UART output

@@ -149,6 +149,7 @@ ipv4_packet_header::ipv4_packet_header(uint16_t payload_size,
                                        const ipv4_options_t &options) {
 
   this->version = 4;
+  this->options = options;
 
   size_t aligned_options_size = (((this->options.size() + 3) >> 2) << 2);
   this->header_length = (FIXED_PART_HEADER_SIZE + aligned_options_size) >> 2;
@@ -195,6 +196,10 @@ uint16_t ipv4_packet_header::calculate_checksum() {
 
   this->header_check_sum = preserve_checksum;
   return (~sum) & 0b1111111111111111;
+}
+void ipv4_packet_header::redirect() {
+  this->ttl--;
+  this->header_check_sum = this->calculate_checksum();
 }
 
 void ipv4_packet_header::debug() {

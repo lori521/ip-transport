@@ -1,3 +1,6 @@
 .vscode
 build/
 .idea/
+.cmake/
+pico-sdk/
+CMakeFiles/

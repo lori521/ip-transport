@@ -1,7 +1,7 @@
 #pragma once
 
-#include "ethernet.hpp"
-#include "manchester.hpp"
+#include "arp/arp.hpp"
+#include "routing/routing.hpp"
 #include <cstdint>
 #include <header/header.hpp>
 #include <set>
@@ -43,35 +43,35 @@ struct ipv4_packet_batch_t {
 
 class IPv4 {
 private:
-  Manchester &manchester;
-  Ethernet &ethernet;
+  IPv4Router &router;
+  ARP &arp;
   ipv4_settings_t settings;
   std::unordered_map<uint16_t, ipv4_packet_batch_t> packets;
 
-  bool ReadPackets(std::vector<uint8_t> &data);
+  bool ReadPackets(ipv4_packet_t packet);
+  bool RedirectIPPacket(ipv4_packet_t packet);
 
   bool PopFinishedBatch(ipv4_packet_batch_t &finished);
   void RemoveTimedOutBatches();
 
-  ipv4_packet_batch_t RoutePacket(ipv4_packet_t packet, char *destination);
-
-  bool GeneratePackets(std::vector<uint8_t> &payload, char destination[],
+  bool GeneratePackets(std::vector<uint8_t> &payload, uint32_t destination,
                        ipv4_packet_batch_t &batch);
-  bool GeneratePackets(std::vector<uint8_t> &payload, char *destination,
+  bool GeneratePackets(std::vector<uint8_t> &payload, uint32_t destination,
                        ipv4_packet_batch_t &batch,
                        const ipv4_options_t &options);
+  bool HandleARP();
 
 public:
-  IPv4(Manchester &manchester, Ethernet &ethernet, ipv4_settings_t &settings)
-      : manchester(manchester), ethernet(ethernet), settings(settings) {}
+  IPv4(ARP &arp, IPv4Router &router, const ipv4_settings_t &settings)
+      : arp(arp), router(router), settings(settings) {}
 
   bool SendIPPacket(vector<uint8_t> &payload, char *destination);
+  bool SendIPPacket(vector<uint8_t> &payload, uint32_t destination);
   bool ReadIPPacket(vector<uint8_t> &received_payload, char *source);
 
   // Support this for future use
   bool ReadIPPacket(vector<uint8_t> &received_payload,
                     ipv4_packet_header &header);
-
   uint32_t GetSourceAddress();
   void GetSourceAddress(char *address);
 };
